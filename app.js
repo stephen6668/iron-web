@@ -1,4 +1,4 @@
-const API_URL = ""; // Später hier deine HTTPS-IRON-Adresse eintragen. Leer = Demo-Modus.
+const API_URL = "https://findlaw-ladies-evident-appraisal.trycloudflare.com"; // Später hier deine HTTPS-IRON-Adresse eintragen. Leer = Demo-Modus.
 const $ = s => document.querySelector(s);
 const response = $("#response");
 const input = $("#commandInput");
