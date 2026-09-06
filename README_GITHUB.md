@@ -17,3 +17,6 @@ Aktuell ist es das Frontend. Als nächstes verbinden wir es mit `iron_assistant.
 - sichere Authentifizierung
 
 Port 5050 nicht direkt öffentlich ins Internet stellen.
+
+## PC-Verbindung
+Die API-Erweiterung ist in `iron_assistant.py` enthalten. Installiere `flask-cors`. Die echte Internet-Verbindung von GitHub Pages zum PC bauen wir im nächsten Schritt sicher über HTTPS/Tunnel auf.
