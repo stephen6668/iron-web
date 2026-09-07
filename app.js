@@ -1,4 +1,4 @@
-const API_URL = "https://after-heavy-acer-creature.trycloudflare.com";
+const API_URL = "https://hardcover-terrorism-authorized-dubai.trycloudflare.com";
 const $ = s => document.querySelector(s);
 const response = $("#response");
 const input = $("#commandInput");
