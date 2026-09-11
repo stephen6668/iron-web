@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IRON // Appwrite Diagnose v18.2</title>
+<link rel="stylesheet" href="style.css?v=182">
+<style>
+body{padding:32px;max-width:1000px;margin:auto}
+.box{background:#07131c;border:1px solid #1b91b7;padding:20px;margin:14px 0;border-radius:8px}
+.ok{color:#62f5bd}.bad{color:#ff7482}.warn{color:#ffd26a}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#02080d;padding:14px}
+input{display:block;width:min(460px,95%);padding:12px;margin:8px 0}
+button{padding:12px 18px;margin:5px}
+</style>
+</head>
+<body>
+<h1>IRON // APPWRITE DIAGNOSE v18.2</h1>
+
+<div class="box">
+<div id="loadState">Prüfe Appwrite...</div>
+<pre id="config"></pre>
+</div>
+
+<div class="box">
+<input id="email" type="email" placeholder="Appwrite E-Mail">
+<input id="password" type="password" placeholder="Appwrite Passwort">
+<button id="loginBtn" disabled>LOGIN TESTEN</button>
+<button id="diagBtn" disabled>DIAGNOSE</button>
+<p id="msg"></p>
+</div>
+
+<div class="box">
+<div id="summary"></div>
+<pre id="result">Noch nicht getestet.</pre>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/appwrite@17.0.0"></script>
+<script src="iron-appwrite.js?v=182"></script>
+<script>
+const $ = s => document.querySelector(s);
+
+function showLoadState(){
+  const sdk = !!window.Appwrite;
+  const bridge = !!window.IRONCloud;
+  const err = window.IRON_APPWRITE_LOAD_ERROR;
+
+  $("#config").textContent = JSON.stringify({
+    sdkLoaded: sdk,
+    bridgeLoaded: bridge,
+    hostname: location.hostname,
+    config: window.IRON_APPWRITE || null,
+    loadError: err || null
+  }, null, 2);
+
+  if (sdk && bridge) {
+    $("#loadState").innerHTML = '<span class="ok">✓ Appwrite SDK + IRON Bridge geladen.</span>';
+    $("#loginBtn").disabled = false;
+    $("#diagBtn").disabled = false;
+  } else {
+    $("#loadState").innerHTML =
+      '<span class="bad">✗ Appwrite konnte nicht vollständig geladen werden.</span>' +
+      (err ? '<br>'+err : '');
+  }
+}
+
+async function diagnose(){
+  if (!window.IRONCloud) {
+    $("#msg").className="bad";
+    $("#msg").textContent="IRONCloud fehlt. Ladefehler siehe oben.";
+    return;
+  }
+
+  $("#result").textContent="Teste...";
+  try {
+    const d = await window.IRONCloud.diagnose();
+    $("#result").textContent=JSON.stringify(d,null,2);
+    let h = "";
+    h += `<p class="${d.account?.ok?'ok':'bad'}">${d.account?.ok?'✓':'✗'} Appwrite Account API</p>`;
+    if (d.user) h += `<p class="ok">✓ Eingeloggt: ${d.user.email}</p>`;
+    else h += `<p class="warn">! Noch nicht eingeloggt</p>`;
+
+    for (const [name,t] of Object.entries(d.tables||{})) {
+      h += `<p class="${t.ok?'ok':'bad'}">${t.ok?'✓':'✗'} ${name} [${t.id}] ${t.ok?'OK':((t.code||'')+' '+(t.message||''))}</p>`;
+    }
+    $("#summary").innerHTML=h;
+  } catch(e) {
+    $("#summary").innerHTML='<p class="bad">✗ Diagnosefehler</p>';
+    $("#result").textContent=JSON.stringify({
+      message:e?.message||String(e), code:e?.code||null, type:e?.type||null
+    },null,2);
+  }
+}
+
+$("#loginBtn").onclick = async () => {
+  if (!window.IRONCloud || typeof window.IRONCloud.login !== "function") {
+    $("#msg").className="bad";
+    $("#msg").textContent="Login-Funktion wurde nicht geladen.";
+    return;
+  }
+
+  $("#msg").className="";
+  $("#msg").textContent="Login...";
+  try {
+    const u = await window.IRONCloud.login($("#email").value.trim(), $("#password").value);
+    $("#msg").className="ok";
+    $("#msg").textContent="✓ Login erfolgreich: "+u.email;
+    await diagnose();
+  } catch(e) {
+    $("#msg").className="bad";
+    $("#msg").textContent=`✗ Login fehlgeschlagen [${e?.code||"NET"}]: ${e?.message||e}`;
+  }
+};
+
+$("#diagBtn").onclick=diagnose;
+showLoadState();
+if (window.IRONCloud) diagnose();
+</script>
+</body>
+</html>
