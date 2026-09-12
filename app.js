@@ -1,0 +1,499 @@
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const cloud = window.IRONCloud;
+if (!cloud) {
+  const why = window.IRON_APPWRITE_LOAD_ERROR || "IRON Appwrite Bridge wurde nicht geladen.";
+  console.error("IRON Cloud startup:", why);
+  window.addEventListener("DOMContentLoaded", () => {
+    const box = document.createElement("div");
+    box.style.cssText = "position:fixed;inset:20px;z-index:99999;background:#12080a;color:#ff8290;border:1px solid #ff5265;padding:18px;font:14px monospace;overflow:auto";
+    box.innerHTML = "<b>IRON APPWRITE STARTFEHLER</b><br><br>" + String(why) +
+      "<br><br>Prüfe, ob <b>iron-appwrite.js</b> auf GitHub hochgeladen wurde.";
+    document.body.appendChild(box);
+  });
+  throw new Error(why);
+}
+const response = $("#response");
+const input = $("#commandInput");
+let currentUser = null;
+let pcOnline = false;
+let pcLastSeen = null;
+
+function show(text) {
+  const msg = String(text ?? "");
+  if (response) response.textContent = "IRON // " + msg;
+  const answer = $("#answerText");
+  if (answer) {
+    answer.textContent = msg;
+    answer.classList.add("has-answer");
+  }
+  const hudAnswer = $("#hudAnswer");
+  if (hudAnswer) hudAnswer.textContent = msg;
+}
+function speak(text) {
+  if (!text) return false;
+  if (!("speechSynthesis" in window)) {
+    const s=$("#speechStatus"); if(s) s.textContent="TEXT ONLY";
+    return false;
+  }
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(text).replace(/^IRON\s*\/\/\s*/i, ""));
+    u.lang = "de-DE"; u.rate = 1; u.pitch = 1;
+    u.onstart=()=>{ const s=$("#speechStatus"); if(s) s.textContent="SPEAKING"; };
+    u.onend=()=>{ const s=$("#speechStatus"); if(s) s.textContent="READY"; };
+    u.onerror=()=>{ const s=$("#speechStatus"); if(s) s.textContent="TEXT ONLY"; };
+    speechSynthesis.speak(u);
+    return true;
+  }catch{
+    const s=$("#speechStatus"); if(s) s.textContent="TEXT ONLY";
+    return false;
+  }
+}
+function escapeHtml(v) {
+  return String(v ?? "").replace(/[&<>\"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+}
+function nowISO(){ return new Date().toISOString(); }
+
+// ---------- AUTH ----------
+function ensureAuthUI() {
+  if ($("#ironAuth")) return;
+  document.body.insertAdjacentHTML("beforeend", `
+    <section class="auth-overlay" id="ironAuth">
+      <div class="auth-card">
+        <div class="eyebrow">IRON CLOUD // SECURE ACCESS</div>
+        <h2>ACCESS REQUIRED</h2>
+        <p>Mit deinem Appwrite-IRON-Konto anmelden.</p>
+        <input id="authEmail" type="email" placeholder="E-Mail" autocomplete="username">
+        <input id="authPassword" type="password" placeholder="Passwort" autocomplete="current-password">
+        <button id="authLogin">LOGIN</button>
+        <div id="authError"></div>
+      </div>
+    </section>`);
+  $("#authLogin").onclick = async () => {
+    const email = $("#authEmail").value.trim();
+    const password = $("#authPassword").value;
+    const err = $("#authError");
+    err.textContent = "";
+    try {
+      currentUser = await cloud.login(email,password);
+      $("#ironAuth").classList.remove("open");
+      await afterLogin();
+    } catch(e) {
+      err.textContent = e?.message || "Login fehlgeschlagen.";
+    }
+  };
+  $("#authPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#authLogin").click(); });
+}
+async function initAuth(){
+  ensureAuthUI();
+  try {
+    currentUser = await cloud.currentUser();
+  } catch(e) {
+    setCloudStatus(false);
+    $("#ironAuth").classList.add("open");
+    const err = $("#authError");
+    if (err) err.textContent = `Appwrite-Verbindung fehlgeschlagen [${e?.code || "NET"}]: ${e?.message || e}`;
+    return false;
+  }
+  if (!currentUser) { $("#ironAuth").classList.add("open"); return false; }
+  await afterLogin(); return true;
+}
+async function afterLogin(){
+  await checkCloud();
+  await Promise.allSettled([checkPC(), renderTasksScreen(), renderPlansScreen(), renderShoppingScreen(), updateHudMetrics()]);
+}
+window.ironLogout = async()=>{ await cloud.logout(); location.reload(); };
+
+// ---------- STATUS ----------
+function setCloudStatus(ok){
+  const el = $("#cloudStatus");
+  if(el){
+    el.textContent = ok ? "ONLINE" : "OFFLINE";
+    el.classList.toggle("offline", !ok);
+  }
+  const hud = $("#hudCloud");
+  if(hud) hud.textContent = ok ? "ONLINE" : "OFFLINE";
+}
+
+async function checkCloud(){
+  try{
+    const ok = typeof cloud.pingCloud === "function" ? await cloud.pingCloud() : false;
+    setCloudStatus(ok);
+    return ok;
+  }catch{
+    setCloudStatus(false);
+    return false;
+  }
+}
+
+function setPCStatus(ok, lastSeen){
+  pcOnline = ok;
+  pcLastSeen = lastSeen || null;
+
+  // IMPORTANT: never use a generic ".offline" selector here.
+  // It could accidentally overwrite the cloud-status element.
+  const el = $("#pcStatus");
+  if(el){
+    el.textContent = ok ? "ONLINE" : "OFFLINE";
+    el.classList.toggle("offline", !ok);
+  }
+
+  const hud = $("#hudPC");
+  if(hud) hud.textContent = ok ? "ONLINE" : "OFFLINE";
+}
+
+async function checkPC(){
+  if(!currentUser) return;
+  try {
+    const row = await cloud.get(cloud.cfg.tables.pcStatus, cloud.cfg.pcStatusRowId);
+    const seen = row.last_seen ? new Date(row.last_seen).getTime() : 0;
+    const fresh = !!row.online && Date.now()-seen < 45000;
+    setPCStatus(fresh,row.last_seen);
+  } catch { setPCStatus(false,null); }
+}
+
+// ---------- CLOUD DATA ----------
+async function createTask(text, datum="Offen"){
+  const perms = cloud.userRowPermissions(currentUser?.$id);
+  return cloud.create(cloud.cfg.tables.tasks, {
+    text, datum, erledigt:false, erstellt:nowISO()
+  }, cloud.ID.unique(), perms);
+}
+async function createPlan(name, inhalt){
+  const perms = cloud.userRowPermissions(currentUser?.$id);
+  return cloud.create(cloud.cfg.tables.plans, {
+    name, inhalt, erstellt:nowISO()
+  }, cloud.ID.unique(), perms);
+}
+async function loadTasks(){ return renderTasksScreen(); }
+async function renderTasksScreen(){
+  const el=$("#tasksList"); if(!el || !currentUser) return;
+  el.innerHTML="<p class='muted'>Lade Cloud-Tasks...</p>";
+  try{
+    const tasks=await cloud.list(cloud.cfg.tables.tasks,[cloud.Query.orderDesc("$createdAt"), cloud.Query.limit(100)]);
+    el.innerHTML=tasks.length?tasks.map(t=>`<article class="data-card task-card screen-task ${t.erledigt?"done":""}">
+      <label><input type="checkbox" ${t.erledigt?"checked":""} onchange="toggleTaskAndRefresh('${t.$id}',this.checked)"><span>${escapeHtml(t.text)}</span></label>
+      <small>${escapeHtml(t.datum||"Offen")}</small></article>`).join(""):
+      `<div class="empty-screen"><div>✓</div><strong>NO TASKS</strong><p>Zum Beispiel: „Erstelle eine Task Zimmer aufräumen.“</p></div>`;
+  }catch(e){ el.innerHTML=`<p class='muted'>Cloud-Tasks konnten nicht geladen werden: ${escapeHtml(e.message)}</p>`; }
+}
+async function toggleTaskAndRefresh(id,done){ await cloud.update(cloud.cfg.tables.tasks,id,{erledigt:done}); renderTasksScreen(); }
+async function deleteTask(id){ await cloud.remove(cloud.cfg.tables.tasks,id); renderTasksScreen(); }
+
+async function renderPlans(){ return renderPlansScreen(); }
+async function renderPlansScreen(){
+  const el=$("#plansList"); if(!el || !currentUser) return;
+  el.innerHTML="<p class='muted'>Lade Cloud-Pläne...</p>";
+  try{
+    const plans=await cloud.list(cloud.cfg.tables.plans,[cloud.Query.orderDesc("$createdAt"), cloud.Query.limit(100)]);
+    el.innerHTML=plans.length?plans.map(p=>`<article class="data-card plan-screen-card">
+      <div class="data-head"><div><strong>${escapeHtml(p.name||"Plan")}</strong><small>${escapeHtml(p.erstellt||p.$createdAt||"")}</small></div>
+      <button onclick="deletePlanAndRefresh('${p.$id}')">×</button></div>
+      <div class="plan-cloud-text">${escapeHtml(p.inhalt||"").replace(/\n/g,"<br>")}</div></article>`).join(""):
+      `<div class="empty-screen"><div>◫</div><strong>NO PLANS</strong><p>Zum Beispiel: „Erstelle einen Plan für morgen.“</p></div>`;
+  }catch(e){el.innerHTML=`<p class='muted'>Cloud-Pläne konnten nicht geladen werden: ${escapeHtml(e.message)}</p>`;}
+}
+async function deletePlanAndRefresh(id){ await cloud.remove(cloud.cfg.tables.plans,id); renderPlansScreen(); }
+
+const SHOP_PREFIX = "EINKAUF // ";
+
+async function createShoppingList(name, inhalt){
+  return createPlan(SHOP_PREFIX + name, inhalt);
+}
+
+async function renderShoppingScreen(){
+  const el=$("#shoppingList");
+  if(!el || !currentUser) return;
+  el.innerHTML="<p class='muted'>Lade Einkaufsliste...</p>";
+  try{
+    const rows=await cloud.list(cloud.cfg.tables.plans,[cloud.Query.orderDesc("$createdAt"), cloud.Query.limit(100)]);
+    const lists=rows.filter(p=>String(p.name||"").startsWith(SHOP_PREFIX));
+    el.innerHTML=lists.length?lists.map(p=>`<article class="data-card shopping-card">
+      <div class="data-head">
+        <div>
+          <strong>${escapeHtml(String(p.name||"Einkaufsliste").replace(SHOP_PREFIX,""))}</strong>
+          <small>${escapeHtml(p.erstellt||p.$createdAt||"")}</small>
+        </div>
+        <button onclick="deleteShoppingAndRefresh('${p.$id}')">×</button>
+      </div>
+      <div class="shopping-cloud-text">${escapeHtml(p.inhalt||"").replace(/\n/g,"<br>")}</div>
+    </article>`).join(""):
+      `<div class="empty-screen"><div>🛒</div><strong>NO SHOPPING LIST</strong><p>Zum Beispiel: „Iron, erstelle eine Einkaufsliste für Lasagne.“</p></div>`;
+  }catch(e){
+    el.innerHTML=`<p class='muted'>Einkaufsliste konnte nicht geladen werden: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+async function deleteShoppingAndRefresh(id){
+  await cloud.remove(cloud.cfg.tables.plans,id);
+  renderShoppingScreen();
+}
+
+function shoppingRequested(t){
+  return /(einkaufsliste|einkaufs\\s*liste|shopping\\s*list)/i.test(t);
+}
+
+function shoppingTitleFromCommand(t){
+  const raw=t.replace(/^iron[, ]*/i,"").trim();
+  const forMatch=raw.match(/(?:für|fuer)\s+(.+)$/i);
+  if(forMatch && forMatch[1]) return `Einkauf – ${forMatch[1].trim().slice(0,120)}`;
+  return `Einkaufsliste ${new Date().toLocaleDateString("de-DE")}`;
+}
+
+async function buildShoppingList(t){
+  const raw=t.replace(/^iron[, ]*/i,"").trim();
+  const prompt=`Erstelle aus diesem Wunsch eine übersichtliche Einkaufsliste auf Deutsch:
+"${raw}"
+
+Regeln:
+- Nur sinnvolle Einkaufsartikel, keine langen Erklärungen.
+- Gruppiere nach Kategorien, wenn das hilfreich ist.
+- Wenn ein Gericht/Anlass genannt wird, nenne die üblichen Zutaten.
+- Verwende Checkbox-Zeilen im Format "☐ Artikel".
+- Keine Preise erfinden.`;
+  try{
+    return await cloud.askAI(prompt);
+  }catch(e){
+    // Offline/CORS fallback: keep user-provided content visible instead of losing it.
+    const cleaned=raw
+      .replace(/^(erstelle|erstell|mach|mache)\s+(mir\s+)?(eine\s+)?einkaufs?\s*liste\s*(mit|für|fuer)?\s*/i,"")
+      .trim();
+    if(cleaned){
+      const items=cleaned.split(/,| und /i).map(x=>x.trim()).filter(Boolean);
+      if(items.length) return items.map(x=>`☐ ${x}`).join("\\n");
+    }
+    throw e;
+  }
+}
+
+// ---------- COMMAND ROUTER ----------
+function cleanTaskText(t){
+  return t.replace(/^iron[, ]*/i,"")
+    .replace(/^(erstelle|erstell|mach)\s+(mir\s+)?(eine[n]?\s+)?(task|aufgabe)\s*(für\s*)?/i,"")
+    .trim() || t;
+}
+function planRequested(t){ return /(erstelle|erstell|mach).{0,15}(plan|tagesplan|wochenplan)/i.test(t); }
+function taskRequested(t){ return /(erstelle|erstell|mach).{0,15}(task|aufgabe)/i.test(t); }
+function localPCCommand(t){
+  return /(öffne|oeffne|starte|schließe|schliesse|bildschirm|desktop|hud|spotify|programm|datei|ordner|zoom|beschreib.*bild|bild.*beschreib)/i.test(t);
+}
+async function queuePCCommand(t){
+  const row=await cloud.create(cloud.cfg.tables.pcCommands,{
+    command:t,status:"pending",created_at:nowISO(),result:""
+  });
+  return row;
+}
+async function command(t){
+  t=(t||"").trim(); if(!t || !currentUser) return;
+  if(input) input.value="";
+  show("Befehl wird verarbeitet...");
+  try{
+    if(/(öffne|oeffne|zeige).{0,20}(einkaufsliste|einkaufs\s*liste)/i.test(t)){
+      location.href="einkaufsliste.html"; return;
+    }
+    if(shoppingRequested(t)){
+      const title=shoppingTitleFromCommand(t);
+      show("IRON erstellt die Einkaufsliste...");
+      const list=await buildShoppingList(t);
+      await createShoppingList(title,list);
+      const a=`Einkaufsliste gespeichert: ${title}`;
+      show(a); speak(a); renderShoppingScreen(); return;
+    }
+    if(taskRequested(t)){
+      const txt=cleanTaskText(t);
+      await createTask(txt,"Offen");
+      const a=`Task gespeichert: ${txt}`; show(a); speak(a); renderTasksScreen(); return;
+    }
+    if(planRequested(t)){
+      const raw = t.replace(/^iron[, ]*/i,"").trim();
+      const sport = /(sport|fitness|training|trainingsplan)/i.test(raw);
+      const numberMatch = raw.match(/\b([1-7])\b/);
+      const days = numberMatch ? Number(numberMatch[1]) : null;
+
+      let name = sport
+        ? (days ? `Sportplan – ${days} Tage` : "Sportplan")
+        : raw.replace(/^(erstelle|erstell|mach|mache)\s+(mir\s+)?(einen?\s+)?/i,"").slice(0,180);
+
+      if(!name) name = "IRON Plan";
+
+      const prompt = sport
+        ? `Erstelle einen vollständigen, sicheren und ausgewogenen Sportplan${days ? ` für ${days} Trainingstage pro Woche` : ""}.
+Der Nutzerbefehl lautet: "${raw}".
+Der Plan soll für allgemeine Fitness und Gesundheit geeignet sein, mit Aufwärmen, Hauptteil, Pausen/Erholung und kurzem Cool-down.
+Keine extremen Belastungen, kein Übertraining und keine restriktiven Ernährungsregeln.
+Schreibe den Plan übersichtlich auf Deutsch mit Tagen/Einheiten, Übungen bzw. Aktivitäten, Sätzen/Wiederholungen oder Zeitangaben und Erholungshinweisen.`
+        : `Erstelle aus diesem Wunsch einen vollständigen, direkt nutzbaren Plan auf Deutsch:
+"${raw}"
+Nutze klare Abschnitte, sinnvolle Schritte und – falls passend – Tage oder Termine.`;
+
+      show("IRON erstellt den vollständigen Plan...");
+      const fullPlan = await cloud.askAI(prompt);
+      await createPlan(name, fullPlan);
+      const a=`Plan gespeichert: ${name}`;
+      show(a); speak(a); renderPlansScreen(); return;
+    }
+    if(localPCCommand(t)){
+      await checkPC();
+      if(!pcOnline){
+        const a="IRON Cloud ist online, aber dein PC-Agent ist offline. Der PC-Befehl wurde nicht ausgeführt.";
+        show(a); speak(a); return;
+      }
+      await queuePCCommand(t);
+      const a="Befehl wurde an deinen PC-Agenten gesendet."; show(a); speak(a); return;
+    }
+    // Cloud AI fallback: works even when the PC is off.
+    show("IRON Cloud denkt...");
+    const answer = await cloud.askAI(t);
+    show(answer);
+    speak(answer);
+  }catch(e){
+    const code = e?.code ? ` [${e.code}]` : "";
+    show("Cloud-Fehler" + code + ": " + (e?.message||e));
+    console.error("IRON cloud error", e);
+  }
+}
+
+// ---------- UI ----------
+const sendBtn=$("#sendBtn"); if(sendBtn&&input) sendBtn.onclick=()=>command(input.value);
+if(input) input.onkeydown=e=>{if(e.key==="Enter")command(input.value)};
+$$('[data-command]').forEach(x=>x.onclick=()=>command(x.dataset.command));
+$$('nav button').forEach(btn=>{
+  const label=btn.querySelector('small')?.textContent;
+  if(label==='HUD') btn.onclick=()=>location.href='hud.html';
+  if(label==='PLANS') btn.onclick=()=>location.href='plans.html';
+  if(label==='TASKS') btn.onclick=()=>location.href='task.html';
+  if(label==='SHOP') btn.onclick=()=>location.href='einkaufsliste.html';
+  if(label==='SETUP') btn.onclick=()=>show(`CLOUD ${cloud.cfg.projectId} // USER ${currentUser?.email||""}`);
+});
+
+// Upload is intentionally local-only until Appwrite Storage is configured.
+const uploadBtn=$("#uploadBtn"), imageInput=$("#imageInput");
+if(uploadBtn&&imageInput) uploadBtn.onclick=()=>imageInput.click();
+if(imageInput) imageInput.onchange=e=>{
+  const file=e.target.files?.[0]; if(!file)return;
+  show(`Bild ${file.name} ausgewählt. Appwrite Storage wird in der nächsten Stufe verbunden.`);
+  e.target.value="";
+};
+
+
+function initHUDClock(){
+  const dateEl=$("#hudDate");
+  const timeEl=$("#hudTime");
+  if(!dateEl && !timeEl) return;
+  const tick=()=>{
+    const d=new Date();
+    if(dateEl) dateEl.textContent=d.toLocaleDateString("de-DE");
+    if(timeEl) timeEl.textContent=d.toLocaleTimeString("de-DE");
+  };
+  tick(); setInterval(tick,1000);
+}
+
+async function updateHudMetrics(){
+  if(!currentUser) return;
+  try{
+    const [tasks,plans]=await Promise.all([
+      cloud.list(cloud.cfg.tables.tasks,[cloud.Query.limit(100)]),
+      cloud.list(cloud.cfg.tables.plans,[cloud.Query.limit(100)])
+    ]);
+    const normalPlans=plans.filter(p=>!String(p.name||"").startsWith(SHOP_PREFIX));
+    const shopping=plans.filter(p=>String(p.name||"").startsWith(SHOP_PREFIX));
+    const openTasks=tasks.filter(t=>!t.erledigt);
+    const map={
+      hudTaskCount:openTasks.length,
+      hudPlanCount:normalPlans.length,
+      hudShoppingCount:shopping.length
+    };
+    Object.entries(map).forEach(([id,v])=>{const el=$("#"+id);if(el)el.textContent=String(v)});
+  }catch{}
+  const pc=$("#hudPC");
+  if(pc) pc.textContent=pcOnline?"ONLINE":"OFFLINE";
+  // Cloud status is controlled by checkCloud(); login alone does not prove the Function is reachable.
+}
+
+initHUDClock();
+setInterval(()=>{ if(currentUser){ Promise.allSettled([checkCloud(), checkPC()]).then(updateHudMetrics); } },15000);
+
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const voiceBtn=$("#voiceBtn"), voiceStatus=$("#voiceStatus");
+let recognition=null;
+if(SR&&voiceBtn){
+  recognition=new SR();
+  recognition.lang='de-DE';
+  recognition.continuous=false;
+  recognition.interimResults=true;
+  recognition.maxAlternatives=1;
+
+  recognition.onstart=()=>{
+    voiceBtn.classList.add('listening');
+    if(voiceStatus) voiceStatus.textContent='LISTENING';
+    show('Ich höre zu...');
+  };
+
+  recognition.onspeechend=()=>{
+    try{recognition.stop()}catch{}
+  };
+
+  recognition.onend=()=>{
+    voiceBtn.classList.remove('listening');
+    if(voiceStatus) voiceStatus.textContent='STANDBY';
+  };
+
+  recognition.onerror=e=>{
+    voiceBtn.classList.remove('listening');
+    if(voiceStatus) voiceStatus.textContent='ERROR';
+    const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform==="MacIntel" && navigator.maxTouchPoints>1);
+
+    const messages={
+      "not-allowed":"Mikrofon-/Spracherkennungszugriff wurde nicht erlaubt. Erlaube Mikrofon für diese Seite.",
+      "service-not-allowed":isIOS
+        ? "iPhone/iPad: Dieser Browser erlaubt den Spracherkennungsdienst nicht. Öffne IRON direkt in Safari und erlaube dort Mikrofon/Spracherkennung. In anderen iOS-Browsern kann Web Speech blockiert sein."
+        : "Der Browser hat den Spracherkennungsdienst blockiert. Prüfe Sprach- und Mikrofonberechtigungen.",
+      "audio-capture":"Kein Mikrofon verfügbar.",
+      "no-speech":"Ich habe keine Sprache gehört. Tippe erneut auf TALK TO IRON.",
+      "network":"Spracherkennung konnte den Netzwerkdienst nicht erreichen."
+    };
+    show(messages[e.error] || `Spracherkennung: ${e.error||"Fehler"}`);
+  };
+
+  recognition.onresult=e=>{
+    let transcript="";
+    let finalText="";
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const text=e.results[i][0].transcript;
+      transcript+=text;
+      if(e.results[i].isFinal) finalText+=text;
+    }
+    if(input) input.value=transcript.trim();
+    if(finalText.trim()){
+      show(`Gehört: ${finalText.trim()}`);
+      command(finalText.trim());
+    }
+  };
+
+  voiceBtn.onclick=async()=>{
+    try{
+      if(navigator.mediaDevices?.getUserMedia){
+        const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+        stream.getTracks().forEach(track=>track.stop());
+      }
+      recognition.start();
+    }catch(e){
+      show("Mikrofon konnte nicht gestartet werden. Prüfe die Browser-Berechtigung.");
+    }
+  };
+}else if(voiceBtn){
+  voiceBtn.onclick=()=>show('Dieser Browser unterstützt die Web-Spracherkennung nicht. Nutze Chrome/Edge oder gib den Befehl ein.');
+}
+
+window.command=command;
+window.renderPlansScreen=renderPlansScreen; window.renderTasksScreen=renderTasksScreen;
+window.deletePlanAndRefresh=deletePlanAndRefresh; window.toggleTaskAndRefresh=toggleTaskAndRefresh;
+
+initAuth().catch(e=>{
+  console.error("IRON startup error", e);
+  setCloudStatus(false);
+  show("Startfehler: " + (e?.message || e));
+});
+setInterval(()=>{if(currentUser&&!document.hidden){checkCloud();checkPC();}},15000);
