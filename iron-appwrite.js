@@ -155,7 +155,9 @@
           },
           body: JSON.stringify({
             message,
-            userJwt: token.jwt
+            userJwt: token.jwt,
+            source: (window.IRONMobile?.isNative ? "android" : "web"),
+            conversation_id: (window.IRONMobile?.isNative ? "mobile-main" : "web-main")
           })
         });
       }
@@ -165,7 +167,7 @@
         response = await callWithFreshJWT();
       } catch (e) {
         throw new Error(
-          "IRON AI-Function ist vom Browser nicht erreichbar. Appwrite-Datenbank ist weiterhin verbunden."
+          "IRON AI-Function ist aus der Android-App momentan nicht erreichbar. Appwrite-Datenbank ist weiterhin verbunden."
         );
       }
 

@@ -1,15 +1,38 @@
-<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IRON v18.5 Diagnose</title><link rel="stylesheet" href="style.css?v=200"><style>body{padding:28px;max-width:1050px;margin:auto}.box{background:#07131c;border:1px solid #1b91b7;padding:18px;margin:14px 0;border-radius:8px}.ok{color:#62f5bd}.bad{color:#ff7482}.warn{color:#ffd26a}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#02080d;padding:14px}button{padding:11px 16px;margin:4px}input{display:block;width:min(460px,95%);padding:11px;margin:7px 0}</style></head><body>
-<h1>IRON // FULL DIAGNOSE v18.5</h1>
-<div class="box"><b>SDK / Verbindung</b><pre id="base"></pre></div>
-<div class="box"><b>Login</b><input id="email" type="email" placeholder="E-Mail"><input id="password" type="password" placeholder="Passwort"><button id="login">LOGIN</button><span id="loginmsg"></span></div>
-<div class="box"><button id="read">TABELLEN LESEN TESTEN</button><button id="write">TASK + PLAN SCHREIBTEST</button><button id="ai">CLOUD-AI TEST</button><pre id="result">Bereit.</pre></div>
-<script src="https://cdn.jsdelivr.net/npm/appwrite@27.0.0"></script><script src="iron-appwrite.js?v=200"></script><script>
-const $=s=>document.querySelector(s); const C=window.IRONCloud;
-$("#base").textContent=JSON.stringify({sdk:!!window.Appwrite,bridge:!!C,hasTablesDB:typeof Appwrite?.TablesDB==="function",hasJWT:typeof C?.account?.createJWT==="function",functionDomain:C?.cfg?.functionDomain,hostname:location.hostname},null,2);
-async function user(){const u=await C.currentUser();if(!u)throw new Error("Nicht eingeloggt");return u}
-function out(x){$("#result").textContent=typeof x==='string'?x:JSON.stringify(x,null,2)}
-$("#login").onclick=async()=>{try{let u=await C.login($("#email").value.trim(),$("#password").value);$("#loginmsg").className='ok';$("#loginmsg").textContent=' ✓ '+u.email}catch(e){$("#loginmsg").className='bad';$("#loginmsg").textContent=' ✗ '+(e.message||e)}};
-$("#read").onclick=async()=>{try{await user();out(await C.diagnose())}catch(e){out({error:e.message,code:e.code})}};
-$("#write").onclick=async()=>{try{const u=await user();const perms=C.userRowPermissions(u.$id);const t=await C.create(C.cfg.tables.tasks,{text:"IRON DIAGNOSE TEST",datum:"Test",erledigt:false,erstellt:new Date().toISOString()},C.ID.unique(),perms);const p=await C.create(C.cfg.tables.plans,{name:"IRON DIAGNOSE TEST",inhalt:"Test",erstellt:new Date().toISOString()},C.ID.unique(),perms);await C.remove(C.cfg.tables.tasks,t.$id);await C.remove(C.cfg.tables.plans,p.$id);out({ok:true,tasks:"CREATE+DELETE OK",plans:"CREATE+DELETE OK"})}catch(e){out({ok:false,error:e.message,code:e.code,type:e.type})}};
-$("#ai").onclick=async()=>{try{await user();out({ok:true,reply:await C.askAI("Antworte nur mit: IRON CLOUD OK")})}catch(e){out({ok:false,error:e.message,code:e.code,type:e.type})}};
-</script></body></html>
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#06111d">
+<title>IRON · Diagnose</title>
+<link rel="stylesheet" href="style.css?v=650">
+<style>
+.diagnostic-box{padding:16px;margin:0 0 14px;border:1px solid #295777;border-radius:14px;background:#0b1c2ccc}
+.diagnostic-box h2{margin:0 0 8px;font-size:16px}
+.diagnostic-box pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#06111d;padding:12px;border-radius:9px;font-size:12px;line-height:1.5}
+.diagnostic-actions{display:flex;gap:8px;flex-wrap:wrap}.diagnostic-actions button{min-height:44px;padding:9px 12px;border:1px solid #397394;background:#10334a;color:#e7f6ff;border-radius:9px}
+</style>
+</head>
+<body>
+<header class="topbar"><a class="brand" href="index.html"><span class="mark">I</span><div><b>IRON</b><small>DIAGNOSE</small></div></a><div class="status">SYSTEM</div></header>
+<main class="page-main">
+<section class="page-heading"><div class="eyebrow">IRON CORE // STATUS</div><h1>DIAGNOSE<span>.</span></h1><p>Verbindung und Cloud-Routen prüfen. Zugangsdaten werden nicht ausgegeben.</p></section>
+<section class="diagnostic-box"><h2>Cloud-Funktion</h2><pre id="base"></pre></section>
+<section class="diagnostic-box"><h2>Prüfung</h2><div class="diagnostic-actions"><button id="routeCheck">ROUTEN TESTEN</button><button id="all">ALLE TESTEN</button><button id="copy">ERGEBNIS KOPIEREN</button></div><pre id="result">Bereit.</pre></section>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/appwrite@27.0.0"></script>
+<script src="iron-appwrite.js?v=650"></script>
+<script>
+const C=window.IRONCloud,$=s=>document.querySelector(s);const BASE=C?.cfg?.functionDomain||'';
+$('#base').textContent=BASE||'Keine Cloud-Funktion konfiguriert';
+async function get(path){const started=performance.now();try{const r=await fetch(BASE+path,{cache:'no-store'}),raw=await r.text();let data;try{data=JSON.parse(raw)}catch{}return {route:path,http:r.status,ok:r.ok&&data?.ok!==false,ms:Math.round(performance.now()-started),source:data?.source||null,preview:data?JSON.stringify(data).slice(0,220):raw.slice(0,220)}}catch(e){return {route:path,ok:false,error:e.message}}}
+async function run(){const out={app:'IRON Web V1.0',function:BASE,time:new Date().toISOString(),tests:[]};for(const route of ['/api/status','/api/news','/api/stocks?symbols=AAPL','/api/weather?city=Luxembourg'])out.tests.push(await get(route));try{const u=await C.currentUser();if(!u)out.tests.push({route:'/api/chat',ok:false,error:'Nicht angemeldet'});else{const started=performance.now(),reply=await C.askAI('Antworte nur mit: IRON CLOUD OK');out.tests.push({route:'/api/chat',ok:true,ms:Math.round(performance.now()-started),preview:String(reply).slice(0,220)})}}catch(e){out.tests.push({route:'/api/chat',ok:false,error:e.message})}$('#result').textContent=JSON.stringify(out,null,2);return out}
+$('#all').onclick=run;
+$('#copy').onclick=async()=>{const t=$('#result').textContent;try{await navigator.clipboard.writeText(t);alert('Diagnose kopiert.')}catch{alert('Kopieren nicht möglich. Markiere den Text manuell.')}};
+</script>
+<script src="web-bridge.js?v=100"></script>
+<script src="iron-menu.js?v=650"></script>
+<script>
+document.getElementById('routeCheck').onclick=async()=>{const out=document.getElementById('result');out.textContent='Teste...';try{out.textContent=JSON.stringify(await window.ironRouteSelfCheck(),null,2)}catch(e){out.textContent=e.stack||e.message}};
+</script>
+</body></html>

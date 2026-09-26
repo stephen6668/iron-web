@@ -1,4 +1,4 @@
-console.log("[IRON] APP.JS v20 geladen");
+console.log("[IRON] Web V1 geladen");
 /* =========================================================
    IRON v19.8 – DATE DISPLAY FIX
    ========================================================= */
@@ -109,7 +109,24 @@ if("speechSynthesis" in window){
   window.speechSynthesis.onvoiceschanged=selectIronVoice;
 }
 
+
+function cleanTextForSpeech(value){
+  return String(value ?? "")
+    .replace(/https?:\/\/\S+/gi," Link ")
+    .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/gu," ")
+    .replace(/[*_#>`~|•▪◦●○■□✓✔☐☑→←↑↓]+/g," ")
+    .replace(/[,:;()[\]{}"“”„'’…\/\\]+/g," ")
+    .replace(/\s*[-–—]\s*/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
 function speak(text){
+  if(typeof window.IRONMobile?.speak === "function"){
+    const p=Promise.resolve(window.IRONMobile.speak(cleanTextForSpeech(text)));
+    window.__ironLastSpeechPromise=p;
+    return p;
+  }
   const msg=String(text||"").trim();
   if(!msg) return;
 
@@ -202,13 +219,14 @@ async function initAuth(){
 async function afterLogin(){
   await checkCloud();
   await Promise.allSettled([checkPC(), renderTasksScreen(), renderPlansScreen(), renderShoppingScreen(), updateHudMetrics()]);
+  if($("#photoGrid")) renderPhotoLibrary().catch(e=>show("Foto-Bibliothek: "+e.message));
 }
 window.ironLogout = async()=>{ await cloud.logout(); location.reload(); };
 
 // ---------- STATUS ----------
 function setCloudStatus(ok){
-  const el = $("#cloudStatus");
-  if(el){
+  for(const el of [$("#cloudStatus"),$("#cloudStatusFooter")]){
+    if(!el) continue;
     el.textContent = ok ? "ONLINE" : "OFFLINE";
     el.classList.toggle("offline", !ok);
   }
@@ -264,7 +282,8 @@ async function createPlan(name, inhalt){
   const payload={
     name:String(name||"Plan").trim(),
     inhalt:String(inhalt||"").trim(),
-    erstellt:new Date().toISOString()
+    erstellt:new Date().toISOString(),
+    typ:"plan"
   };
 
   if(!payload.inhalt) throw new Error("Plan-Inhalt ist leer.");
@@ -361,7 +380,19 @@ const SHOP_PREFIX = "EINKAUF // ";
 
 async function createShoppingList(name, inhalt){
   const cleanName=String(name||"Einkaufsliste").replace(/^EINKAUF\s*\/\/\s*/i,"").trim() || "Einkaufsliste";
-  const row=await createPlan(`EINKAUF // ${cleanName}`, String(inhalt||"").trim());
+  const payload={
+    name:`EINKAUF // ${cleanName}`,
+    inhalt:String(inhalt||"").trim(),
+    erstellt:new Date().toISOString(),
+    typ:"einkauf"
+  };
+  if(!payload.inhalt) throw new Error("Einkaufsliste ist leer.");
+  const row=await cloud.create(cloud.cfg.tables.plans,payload);
+  try{
+    const cached=JSON.parse(localStorage.getItem("iron_plans_cache")||"[]");
+    cached.unshift({...payload,$id:row?.$id||("local_"+Date.now())});
+    localStorage.setItem("iron_plans_cache",JSON.stringify(cached.slice(0,150)));
+  }catch{}
   try{ await renderShoppingScreen(); }catch(e){ console.warn("Shopping render:",e); }
   return row;
 }
@@ -492,6 +523,7 @@ const GOOGLE_CLIENT_ID = "881990901270-tbc86vea22nb1a3ev6t7ck9cdkbq5avl.apps.goo
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 let gmailTokenClient = null;
 let gmailAccessToken = null;
+let gmailLastMails = [];
 
 function gmailSetState(text){
   const el=$("#gmailState");
@@ -549,34 +581,81 @@ async function loadGmailInbox(){
   const box=$("#hudNews");
   if(box) box.innerHTML="<p>Lade Gmail…</p>";
   try{
-    const list=await gmailFetch("messages?maxResults=8&q=in:inbox");
-    const ids=(list.messages||[]).slice(0,8);
+    const list=await gmailFetch("messages?maxResults=20&q=in:inbox newer_than:14d");
+    const ids=(list.messages||[]).slice(0,20);
     const mails=[];
     for(const m of ids){
       const msg=await gmailFetch(`messages/${encodeURIComponent(m.id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Date`);
       mails.push({
         id:msg.id,
+        threadId:msg.threadId,
         from:gmailHeader(msg.payload?.headers,"From"),
         subject:gmailHeader(msg.payload?.headers,"Subject") || "(Kein Betreff)",
         date:gmailHeader(msg.payload?.headers,"Date"),
-        snippet:msg.snippet || ""
+        snippet:msg.snippet || "",
+        unread:(msg.labelIds||[]).includes("UNREAD"),
+        important:(msg.labelIds||[]).includes("IMPORTANT")
       });
     }
+    gmailLastMails=mails;
     if(box){
-      box.innerHTML=mails.map(m=>`
+      box.innerHTML=mails.slice(0,10).map(m=>`
         <div class="hud-live-item">
-          <b>${escapeHtml(m.subject)}</b>
+          <b>${m.unread?"● ":""}${escapeHtml(m.subject)}</b>
           <small>${escapeHtml(m.from)}</small>
           <small>${escapeHtml(m.snippet)}</small>
         </div>
       `).join("") || "<p>Keine Mails im Posteingang.</p>";
     }
-    show(`Gmail geladen: ${mails.length} Mails.`);
+    gmailSetState("GMAIL: VERBUNDEN (NUR LESEN)");
+    await notifyImportantLoadedMails(mails);
+    return mails;
   }catch(e){
     gmailSetState("GMAIL: FEHLER");
     if(box) box.innerHTML=`<p>Gmail Fehler: ${escapeHtml(e.message)}</p>`;
     show(`Gmail Fehler: ${e.message}`);
+    throw e;
   }
+}
+
+async function summarizeImportantMails(){
+  if(!gmailAccessToken){
+    show("Gmail ist noch nicht verbunden. Öffne zuerst Gmail im IRON HUD und melde dich an.");
+    throw new Error("Gmail ist nicht verbunden.");
+  }
+  const mails=gmailLastMails.length ? gmailLastMails : await loadGmailInbox();
+  const compact=mails.slice(0,20).map((m,i)=>({
+    nr:i+1,from:m.from,subject:m.subject,snippet:m.snippet,unread:m.unread,important:m.important,date:m.date
+  }));
+  const prompt=`Fasse die wichtigsten E-Mails dieses Posteingangs für Sir kurz zusammen.
+Priorisiere ungelesene, als IMPORTANT markierte, Termine, Rechnungen, Schule/Arbeit, Bestellungen,
+Chevalier & Roth und Dinge, die eine Antwort oder Handlung brauchen.
+Ignoriere Newsletter/Werbung wenn sie nicht wichtig sind.
+Maximal 6 Mails. Nenne Absender, Betreff und in 1-2 Sätzen was wichtig ist.
+E-Mails: ${JSON.stringify(compact)}`;
+  const summary=await cloud.askAI(prompt);
+  show(summary);
+  await speak(summary);
+  return summary;
+}
+
+async function notifyImportantLoadedMails(mails){
+  if(!window.IRONMobile?.isNative || typeof window.IRONMobile.scheduleNotification!=="function") return;
+  const candidates=(mails||[]).filter(m=>m.unread && m.important).slice(0,3);
+  let seen=[];
+  try{ seen=JSON.parse(localStorage.getItem("iron_notified_mail_ids")||"[]"); }catch{}
+  const seenSet=new Set(seen);
+  for(const m of candidates){
+    if(seenSet.has(m.id)) continue;
+    const short=`${m.from}: ${m.subject}. ${m.snippet}`.slice(0,350);
+    await window.IRONMobile.scheduleNotification({
+      title:"IRON // WICHTIGE MAIL",
+      body:`Sir, kontrollieren Sie Ihre Mails. ${short}`,
+      at:new Date(Date.now()+1500)
+    }).catch(()=>{});
+    seenSet.add(m.id);
+  }
+  localStorage.setItem("iron_notified_mail_ids",JSON.stringify([...seenSet].slice(-100)));
 }
 
 function gmailDisconnect(){
@@ -592,28 +671,91 @@ function gmailDisconnect(){
 
 // ---------- LIVE HUD DATA ----------
 async function fetchIronJSON(path){
-  const r=await fetch(cloud.cfg.functionDomain + path,{method:"GET",cache:"no-store"});
-  const j=await r.json().catch(()=>null);
-  if(!r.ok || !j?.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+  if(!currentUser) throw new Error("Bitte melde dich zuerst bei IRON an.");
+  const call=async p=>{
+    const r=await fetch(cloud.cfg.functionDomain+p,{method:"GET",cache:"no-store"});
+    const j=await r.json().catch(()=>null);
+    return {r,j,p};
+  };
+
+  let {r,j,p}=await call(path);
+
+  // Compatibility fallbacks. These avoid a raw 404 when an older function is still active.
+  if(r.status===404 && path==="/api/news/important"){
+    ({r,j,p}=await call("/api/news"));
+  }
+  if(r.status===404 && path==="/api/images/list"){
+    ({r,j,p}=await call("/api/images/status"));
+  }
+
+  if(!r.ok || !j?.ok){
+    if(r.status===404){
+      throw new Error(`IRON Cloud Route fehlt (${path}). Deploye die Appwrite Function V3.2.`);
+    }
+    throw new Error(j?.error || `IRON Cloud HTTP ${r.status}`);
+  }
+  return j;
+}
+
+async function postIronJSON(path,body){
+  if(!currentUser) throw new Error("Bitte melde dich zuerst bei IRON an.");
+  const call=async p=>{
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),90000);
+    try{
+      const r=await fetch(cloud.cfg.functionDomain+p,{
+        method:"POST",
+        headers:{"Content-Type":"text/plain;charset=UTF-8"},
+        body:JSON.stringify(body||{}),
+        cache:"no-store",
+        signal:controller.signal
+      });
+      const j=await r.json().catch(()=>null);
+      return {r,j,p};
+    }catch(e){
+      if(e?.name==="AbortError") throw new Error(`IRON Cloud Timeout bei ${p}. Die Recherche hat zu lange gedauert.`);
+      throw new Error(`IRON Cloud Netzwerkfehler bei ${p}: ${e?.message||e}`);
+    }finally{clearTimeout(timer)}
+  };
+
+  let {r,j,p}=await call(path);
+
+  if(r.status===404 && path==="/api/research-plan"){
+    ({r,j,p}=await call("/api/recipes/research"));
+  }
+
+  if(!r.ok || !j?.ok){
+    if(r.status===404){
+      throw new Error(`IRON Cloud Route fehlt (${path}). Deploye die Appwrite Function V3.2.`);
+    }
+    throw new Error(j?.error || `IRON Cloud HTTP ${r.status}`);
+  }
   return j;
 }
 
 async function loadNews(){
   const box=$("#hudNews");
-  if(box) box.innerHTML="<p>Lade aktuelle News…</p>";
+  if(box) box.innerHTML="<p>IRON recherchiert die wichtigsten Weltnachrichten…</p>";
   try{
-    const data=await fetchIronJSON("/api/news");
+    const data=await fetchIronJSON("/api/news/important");
     if(box){
-      box.innerHTML=(data.items||[]).slice(0,5).map(n=>
-        `<a class="hud-live-item" href="${escapeHtml(n.link)}" target="_blank" rel="noopener">
-          <b>${escapeHtml(n.title)}</b><small>${escapeHtml(n.source||"News")}</small>
+      box.innerHTML=(data.items||[]).slice(0,8).map(n=>
+        `<a class="hud-live-item" href="${escapeHtml(n.url||"#")}" ${n.url?'target="_blank" rel="noopener"':""}>
+          <b>${escapeHtml(n.title||"News")}</b>
+          <small>${escapeHtml(n.summary||"")}</small>
+          <small>${escapeHtml(n.why_important||"")}</small>
         </a>`
-      ).join("") || "<p>Keine News gefunden.</p>";
+      ).join("") || "<p>Keine wichtigen News gefunden.</p>";
     }
-    show(`News aktualisiert: ${(data.items||[]).length} Meldungen.`);
+    const spoken=(data.items||[]).slice(0,6).map((n,i)=>`${i+1}. ${n.title}. ${n.summary}`).join(" ");
+    const text=data.summary ? `${data.summary}\n\n${spoken}` : spoken;
+    show(text || "Keine wichtigen Weltnachrichten gefunden.");
+    if(text) speak(text);
+    return data;
   }catch(e){
     if(box) box.innerHTML=`<p>News nicht erreichbar: ${escapeHtml(e.message)}</p>`;
     show(`News-Fehler: ${e.message}`);
+    throw e;
   }
 }
 
@@ -623,7 +765,7 @@ async function loadStocks(){
   try{
     const data=await fetchIronJSON("/api/stocks?symbols=AAPL,MSFT,NVDA,TSLA");
     if(box){
-      box.innerHTML=(data.items||[]).map(s=>
+      box.innerHTML=(data.stocks||[]).map(s=>
         `<div class="hud-live-item"><b>${escapeHtml(s.symbol)}</b>
           <span>${s.price==null?"–":escapeHtml(String(s.price))} ${escapeHtml(s.currency||"")}</span>
           <small>${escapeHtml(s.note||"letzter verfügbarer Kurs")}</small>
@@ -670,13 +812,353 @@ function initHudImage(){
 
   if(img) img.onclick=()=>{
     if(!img.src) return;
-    const overlay=document.createElement("div");
-    overlay.className="hud-image-fullscreen";
-    overlay.innerHTML=`<img src="${img.src}" alt="IRON Vision"><button>×</button>`;
-    overlay.onclick=()=>overlay.remove();
-    document.body.appendChild(overlay);
+    openImageStudio(img.src,currentCloudImage);
   };
 }
+
+
+
+function renderEditedImageDataURL(src,{rotation=0,brightness=100,contrast=100}={}){
+  return new Promise((resolve,reject)=>{
+    const im=new Image();
+    im.onload=()=>{
+      const swap=Math.abs(rotation%180)===90;
+      const canvas=document.createElement("canvas");
+      canvas.width=swap?im.naturalHeight:im.naturalWidth;
+      canvas.height=swap?im.naturalWidth:im.naturalHeight;
+      const ctx=canvas.getContext("2d");
+      ctx.filter=`brightness(${brightness}%) contrast(${contrast}%)`;
+      ctx.translate(canvas.width/2,canvas.height/2);
+      ctx.rotate(rotation*Math.PI/180);
+      ctx.drawImage(im,-im.naturalWidth/2,-im.naturalHeight/2);
+      resolve(canvas.toDataURL("image/jpeg",0.92));
+    };
+    im.onerror=()=>reject(new Error("Bild konnte nicht bearbeitet werden."));
+    im.src=src;
+  });
+}
+
+function openImageStudio(src,meta=null){
+  const overlay=document.createElement("div");
+  overlay.className="hud-image-fullscreen iron-studio-overlay";
+  overlay.innerHTML=`
+    <div class="iron-image-viewer iron-studio">
+      <img src="${src}" alt="IRON Vision">
+      <div class="iron-image-tools">
+        <button data-zout>−</button><button data-zin>+</button>
+        <button data-rl>↶</button><button data-rr>↷</button>
+        <button data-bright>☀+</button><button data-dark>☀−</button>
+        <button data-contrast>◐+</button><button data-reset>RESET</button>
+        <button data-describe>BESCHREIBEN</button><button data-save>SPEICHERN</button>
+        <button data-close>×</button>
+      </div>
+      <div class="iron-image-description-box">
+        <input data-name value="${escapeHtml(meta?.name||"IRON Bild")}" placeholder="Bildname">
+        <textarea data-desc placeholder="Beschreibung">${escapeHtml(meta?.description||"")}</textarea>
+        <button data-save-desc>BESCHREIBUNG SPEICHERN</button>
+      </div>
+    </div>`;
+  const full=overlay.querySelector("img");
+  let scale=1,rotation=0,brightness=100,contrast=100;
+  const apply=()=>{
+    full.style.transform=`scale(${scale}) rotate(${rotation}deg)`;
+    full.style.filter=`brightness(${brightness}%) contrast(${contrast}%)`;
+  };
+  const stop=fn=>e=>{e.stopPropagation();fn(e);};
+  overlay.querySelector("[data-zin]").onclick=stop(()=>{scale=Math.min(5,scale+.25);apply();});
+  overlay.querySelector("[data-zout]").onclick=stop(()=>{scale=Math.max(.4,scale-.25);apply();});
+  overlay.querySelector("[data-rl]").onclick=stop(()=>{rotation-=90;apply();});
+  overlay.querySelector("[data-rr]").onclick=stop(()=>{rotation+=90;apply();});
+  overlay.querySelector("[data-bright]").onclick=stop(()=>{brightness=Math.min(180,brightness+10);apply();});
+  overlay.querySelector("[data-dark]").onclick=stop(()=>{brightness=Math.max(40,brightness-10);apply();});
+  overlay.querySelector("[data-contrast]").onclick=stop(()=>{contrast=Math.min(180,contrast+10);apply();});
+  overlay.querySelector("[data-reset]").onclick=stop(()=>{scale=1;rotation=0;brightness=100;contrast=100;apply();});
+  overlay.querySelector("[data-close]").onclick=stop(()=>overlay.remove());
+
+  overlay.querySelector("[data-describe]").onclick=stop(async()=>{
+    try{
+      const data=await postIronJSON("/api/vision",{data_url:src,prompt:"Beschreibe dieses Bild knapp und nützlich für meine IRON-Bildbibliothek."});
+      overlay.querySelector("[data-desc]").value=data.description||"";
+      show(data.description||"Keine Beschreibung erhalten.");
+      await speak(data.description||"");
+    }catch(e){show("Bildbeschreibung fehlgeschlagen: "+e.message);}
+  });
+
+  overlay.querySelector("[data-save-desc]").onclick=stop(async()=>{
+    if(!meta?.id){show("Dieses Bild ist noch nicht als Appwrite-Bild gespeichert.");return;}
+    try{
+      const name=overlay.querySelector("[data-name]").value.trim()||meta.name;
+      const description=overlay.querySelector("[data-desc]").value.trim();
+      await postIronJSON("/api/images/update",{id:meta.id,name,description});
+      meta.name=name; meta.description=description; currentCloudImage=meta;
+      show("Bildname und Beschreibung wurden in Appwrite gespeichert.");
+    }catch(e){show("Speichern fehlgeschlagen: "+e.message);}
+  });
+
+  overlay.querySelector("[data-save]").onclick=stop(async()=>{
+    try{
+      show("IRON speichert die bearbeitete Version in Appwrite...");
+      const edited=await renderEditedImageDataURL(src,{rotation,brightness,contrast});
+      const name=(overlay.querySelector("[data-name]").value.trim()||meta?.name||"IRON Bild")+" – bearbeitet";
+      const description=overlay.querySelector("[data-desc]").value.trim();
+      const data=await postIronJSON("/api/images/upload",{name,description,data_url:edited});
+      currentCloudImage=data.image;
+      displayCloudImage(edited,name);
+      show("Bearbeitete Bildversion wurde in Appwrite gespeichert.");
+    }catch(e){show("Bild konnte nicht gespeichert werden: "+e.message);}
+  });
+  document.body.appendChild(overlay);
+}
+
+// ---------- APPWRITE IMAGE LIBRARY ----------
+const IRON_IMAGE_API = "https://starter-function-4j4o.fra.appwrite.run";
+let currentCloudImage = null;
+
+function extractImageRequest(text){
+  let t=String(text||"").replace(/^iron[\s,.:;-]*/i,"").trim();
+  if(!/\b(zeig|zeige|öffne|oeffne|lade)\b/i.test(t)) return null;
+  if(!/\b(bild|foto|image|logo)\b/i.test(t)) return null;
+  t=t.replace(/^.*?\b(?:zeig|zeige|öffne|oeffne|lade)\b/i,"");
+  t=t.replace(/^\s*(?:mir\s+)?(?:bitte\s+)?(?:das|den|die|ein|eine)?\s*/i,"");
+  t=t.replace(/^\s*(?:bild|foto|image|logo)\s*(?:von|vom|für|fuer)?\s*/i,"");
+  t=t.replace(/\s+(?:im|in meinem)\s+hud.*$/i,"").replace(/[.!?]+$/,"").trim();
+  return t || null;
+}
+
+function displayCloudImage(dataUrl, name="IRON Bild"){
+  const img=$("#hudImage"), empty=$("#hudImageEmpty");
+  if(!img) throw new Error("HUD-Bildbereich wurde nicht gefunden.");
+  img.src=dataUrl;
+  img.alt=name;
+  img.classList.add("active");
+  if(empty) empty.hidden=true;
+  img.scrollIntoView({behavior:"smooth",block:"center"});
+}
+
+async function showAppwriteImage(name){
+  // Dedicated photo screen: do not use HUD for cloud photos anymore.
+  const target=`photos.html?name=${encodeURIComponent(name)}`;
+  sessionStorage.setItem("iron_photo_open_name",name);
+  location.href=target;
+  return {ok:true,name};
+}
+
+function smartPlanAndShoppingRequested(t){
+  const x=String(t||"").toLowerCase();
+  const food=/\b(gericht|gerichte|rezept|rezepte|mahlzeit|mahlzeiten|kochen|zubereiten|zutaten)\b/i.test(x);
+  const plan=/\b(plan|wochenplan|tagesplan|woche|tage|mal pro woche|pro woche|ablauf)\b/i.test(x);
+  const shopping=/\b(einkauf|einkaufsliste|einkaufslisten|zutatenliste|zutaten|materialliste|materialien)\b/i.test(x);
+  const multi=/\b([2-9]|10|11|12)\b.*\b(gericht|gerichte|mahlzeit|mahlzeiten|rezept|rezepte)\b/i.test(x);
+  // Recipe requests with schedule/list intent always use the researched combined mode.
+  if(food && (plan || shopping || multi)) return true;
+  return plan && shopping;
+}
+
+function parseIronJson(raw){
+  const txt=String(raw||"").trim()
+    .replace(/^```(?:json)?\s*/i,"").replace(/\s*```$/,"");
+  const a=txt.indexOf("{"), b=txt.lastIndexOf("}");
+  if(a<0 || b<a) throw new Error("IRON konnte den kombinierten Plan nicht strukturieren.");
+  return JSON.parse(txt.slice(a,b+1));
+}
+
+async function buildSmartPlanAndShopping(raw){
+  const data=await postIronJSON("/api/research-plan",{request:raw,save:true});
+  if(!data?.web_researched) throw new Error("IRON konnte die Web-Recherche nicht abschließen.");
+  if(!data?.saved) throw new Error("Der Plan wurde recherchiert, aber noch nicht in Appwrite gespeichert.");
+  return data;
+}
+
+function formatRecipeShopping(recipe){
+  const rows=(recipe.ingredients||[]).map(x=>{
+    const amount=String(x.amount||"").trim();
+    const item=String(x.item||"").trim();
+    return `☐ ${amount ? amount+" " : ""}${item}`.trim();
+  }).filter(Boolean);
+  const source=recipe.source_url ? `\n\nQuelle: ${recipe.source_title||recipe.source_url}\n${recipe.source_url}` : "";
+  return `${recipe.name}${recipe.servings?`\nPortionen: ${recipe.servings}`:""}\n\n${rows.join("\n")}${source}`;
+}
+
+function formatRecipePlan(data){
+  const schedule=(data.schedule||[]).map(x=>`• ${x.slot}: ${x.recipe_name}`).join("\n");
+  const recipes=(data.recipes||[]).map((r,idx)=>{
+    const steps=(r.steps||[]).map((s,i)=>`${i+1}. ${s}`).join("\n");
+    const source=r.source_url?`\nQuelle: ${r.source_title||r.source_url}\n${r.source_url}`:"";
+    return `${idx+1}. ${r.name}${r.servings?` (${r.servings})`:""}\n\nZubereitung:\n${steps}${source}`;
+  }).join("\n\n────────────────────\n\n");
+  return `${data.plan_summary||""}${schedule?`\n\nWOCHEN-/ABLAUFPLAN\n${schedule}`:""}\n\n${recipes}`.trim();
+}
+
+async function saveSmartPlanAndShopping(raw){
+  show("IRON recherchiert online und speichert Plan + Einkaufslisten direkt in Appwrite...");
+  const data=await buildSmartPlanAndShopping(raw);
+
+  try{ await renderPlansScreen(); }catch{}
+  try{ await renderShoppingScreen(); }catch{}
+
+  const recipeCount=Array.isArray(data.recipes)?data.recipes.length:0;
+  const savedLists=Number(data.saved_shopping||0);
+  const msg=recipeCount
+    ? `Fertig. ${recipeCount} Rezepte online recherchiert. Der Plan und ${savedLists} Einkaufslisten wurden in Appwrite gespeichert.`
+    : `Fertig. Der recherchierte Plan wurde in Appwrite gespeichert.`;
+
+  show(msg);
+  await speak(msg);
+  return data;
+}
+
+function calendarCommandRequested(t){
+  const x=String(t||"").toLowerCase();
+  return /\b(termin|kalender|kalendereintrag|meeting|verabredung)\b/.test(x)
+    && /\b(mach|mache|erstell|erstelle|trag|trage|eintragen|plane|plan)\b/.test(x);
+}
+async function createCalendarFromCommand(raw){
+  if(typeof window.IRONWeb?.downloadCalendarEvent!=="function"){
+    throw new Error("Kalenderexport ist in diesem Browser nicht verfügbar.");
+  }
+  const timezone=Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Luxembourg";
+  const parsed=await postIronJSON("/api/calendar/parse",{text:raw,now:new Date().toISOString(),timezone});
+  window.IRONWeb.downloadCalendarEvent(parsed.event);
+  const when=new Date(parsed.event.start).toLocaleString("de-DE");
+  const msg=`Termin ${parsed.event.title} wurde für ${when} als Kalenderdatei heruntergeladen. Öffne die Datei, um ihn in deinen Kalender zu übernehmen.`;
+  show(msg); await speak(msg);
+  return parsed.event;
+}
+
+function mailSummaryRequested(t){
+  return /\b(mail|mails|email|e-mail)\b/i.test(t) && /\b(wichtig|wichtigste|zusammen|zusammenfass|posteingang|neueste)\b/i.test(t);
+}
+
+
+// ---------- DEDICATED PHOTO LIBRARY ----------
+async function ironImageGet(id,preview=false){
+  return fetchIronJSON(`/api/images/get?id=${encodeURIComponent(id)}${preview?"&preview=1":""}`);
+}
+
+async function renderPhotoLibrary(){
+  const grid=$("#photoGrid");
+  const state=$("#photoLibraryState");
+  if(!grid) return;
+  grid.innerHTML="<p>Lade alle Appwrite-Fotos…</p>";
+  if(state) state.textContent="APPWRITE // SYNC";
+
+  try{
+    const data=await fetchIronJSON("/api/images/list");
+    const images=Array.isArray(data.images)?data.images:[];
+    if(state) state.textContent=`${images.length} FOTOS`;
+    if(!images.length){
+      grid.innerHTML="<article class='saved-card'><h3>NO PHOTOS</h3><p>In iron_images wurden keine Bilder gefunden.</p></article>";
+      return;
+    }
+
+    grid.innerHTML=images.map(img=>`
+      <article class="photo-card" data-photo-id="${escapeHtml(img.id)}">
+        <div class="photo-thumb" data-thumb="${escapeHtml(img.id)}"><span>LOADING</span></div>
+        <div class="photo-meta">
+          <h3>${escapeHtml(img.name||"IRON Bild")}</h3>
+          <p>${escapeHtml(img.description||"Keine Beschreibung")}</p>
+          <small>${escapeHtml(formatDate(img.created_at))}</small>
+          <button data-open-photo="${escapeHtml(img.id)}">ÖFFNEN / BEARBEITEN</button>
+        </div>
+      </article>
+    `).join("");
+
+    // Load thumbnails in small batches so the screen stays responsive.
+    const queue=[...images];
+    const workers=Array.from({length:Math.min(4,queue.length)},async()=>{
+      while(queue.length){
+        const img=queue.shift();
+        try{
+          const d=await ironImageGet(img.id,true);
+          const host=grid.querySelector(`[data-thumb="${CSS.escape(img.id)}"]`);
+          if(host && d?.image?.data_url){
+            host.innerHTML=`<img src="${d.image.data_url}" alt="${escapeHtml(img.name||"IRON Bild")}">`;
+          }
+        }catch(e){
+          const host=grid.querySelector(`[data-thumb="${CSS.escape(img.id)}"]`);
+          if(host) host.innerHTML="<span>PREVIEW ERROR</span>";
+        }
+      }
+    });
+    await Promise.all(workers);
+
+    grid.querySelectorAll("[data-open-photo]").forEach(btn=>{
+      btn.onclick=()=>openPhotoLibraryItem(btn.dataset.openPhoto);
+    });
+
+    const wanted=new URLSearchParams(location.search).get("name") || sessionStorage.getItem("iron_photo_open_name");
+    if(wanted){
+      sessionStorage.removeItem("iron_photo_open_name");
+      const hit=images
+        .map(x=>({x,score:imageNameScore(x.name,wanted)}))
+        .sort((p,q)=>q.score-p.score)[0];
+      if(hit?.score>0) await openPhotoLibraryItem(hit.x.id);
+      else show(`Bild „${wanted}“ wurde in Appwrite nicht gefunden.`);
+    }
+  }catch(e){
+    if(state) state.textContent="ERROR";
+    grid.innerHTML=`<article class="saved-card"><h3>APPWRITE FOTO-FEHLER</h3><p>${escapeHtml(e.message)}</p></article>`;
+  }
+}
+
+function imageNameScore(name,q){
+  const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+  const a=norm(name),b=norm(q);
+  if(a===b)return 100;
+  if(a.includes(b)||b.includes(a))return 70;
+  const aw=new Set(a.split(/\s+/)), bw=b.split(/\s+/);
+  return bw.reduce((n,w)=>n+(aw.has(w)?10:0),0);
+}
+
+async function openPhotoLibraryItem(id){
+  show("IRON lädt das Foto aus Appwrite...");
+  const data=await ironImageGet(id,false);
+  if(!data?.image?.data_url) throw new Error("Bilddaten fehlen.");
+  currentCloudImage=data.image;
+  openImageStudio(data.image.data_url,data.image);
+}
+
+async function uploadPhotoLibraryFile(){
+  const file=$("#photoUploadFile")?.files?.[0];
+  const name=$("#photoUploadName")?.value?.trim() || file?.name?.replace(/\.[^.]+$/,"") || "IRON Bild";
+  const description=$("#photoUploadDescription")?.value?.trim() || "";
+  if(!file){ show("Wähle zuerst ein Bild aus."); return; }
+  if(!/^image\/(jpeg|png|webp)$/i.test(file.type)){ show("Erlaubt sind JPG, PNG und WEBP."); return; }
+  if(file.size>10*1024*1024){ show("Das Bild darf maximal 10 MB groß sein."); return; }
+
+  const dataUrl=await new Promise((resolve,reject)=>{
+    const r=new FileReader();
+    r.onload=()=>resolve(r.result);
+    r.onerror=()=>reject(new Error("Bild konnte nicht gelesen werden."));
+    r.readAsDataURL(file);
+  });
+  show("IRON lädt das Bild zu Appwrite hoch...");
+  await postIronJSON("/api/images/upload",{name,description,data_url:dataUrl});
+  if($("#photoUploadFile")) $("#photoUploadFile").value="";
+  if($("#photoUploadName")) $("#photoUploadName").value="";
+  if($("#photoUploadDescription")) $("#photoUploadDescription").value="";
+  await renderPhotoLibrary();
+  show("Bild wurde in Appwrite gespeichert.");
+}
+
+
+async function ironRouteSelfCheck(){
+  const required=[
+    "/api/status",
+    "/api/news/important",
+    "/api/images/list"
+  ];
+  const out=[];
+  for(const path of required){
+    try{
+      const r=await fetch(cloud.cfg.functionDomain+path,{method:"GET",cache:"no-store"});
+      const j=await r.json().catch(()=>null);
+      out.push({path,status:r.status,ok:r.ok&&!!j?.ok,version:j?.version||null,error:j?.error||null});
+    }catch(e){out.push({path,status:0,ok:false,error:e.message});}
+  }
+  return out;
+}
+window.ironRouteSelfCheck=ironRouteSelfCheck;
 
 // ---------- COMMAND ROUTER ----------
 function cleanTaskText(t){
@@ -731,15 +1213,54 @@ async function queuePCCommand(t){
   return row;
 }
 async function command(t){
-  t=(t||"").trim(); if(!t || !currentUser) return;
+  t=(t||"").trim();
+  if(!t)return;
+  if(/was gibt es neues|was ist neu|welt(?:karte|nachrichten|news)?|globus|3d erde/i.test(t)
+     || /(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+[A-Za-zÀ-ÿ]/i.test(t)){
+    const country=t.match(/(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+(.+?)\s*[.!?]?$/i);
+    location.href=country?`world.html?country=${encodeURIComponent(country[1].trim())}`:"world.html";return;
+  }
+  if(!currentUser) return;
   if(input) input.value="";
   show("Befehl wird verarbeitet...");
   try{
+    if(calendarCommandRequested(t)){
+      await createCalendarFromCommand(t);
+      return;
+    }
+    if(mailSummaryRequested(t)){
+      await summarizeImportantMails();
+      return;
+    }
+    // Pure navigation/read requests must never call an API route.
+    if(/\b(öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\b(einkaufsliste|einkaufs\s*liste|einkauf)\b/i.test(t)){
+      location.href="einkaufsliste.html"; return;
+    }
+    if(/\b(öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\b(pläne|plaene|planseite|meine pläne|meine plaene)\b/i.test(t)){
+      location.href="plans.html"; return;
+    }
+    if(/\b(öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\b(fotos|bilder|fotobibliothek|bildbibliothek)\b/i.test(t)){
+      location.href="photos.html"; return;
+    }
+    const requestedImage=extractImageRequest(t);
+    if(requestedImage){
+      await showAppwriteImage(requestedImage);
+      return;
+    }
+    if(smartPlanAndShoppingRequested(t)){
+      await saveSmartPlanAndShopping(t);
+      renderPlansScreen();
+      return;
+    }
     if(/\b(nachrichten|news|schlagzeilen)\b/i.test(t) && !/(plan|einkauf)/i.test(t)){
       await loadNews(); return;
     }
     if(/\b(aktien|aktienkurse|börse|boerse|kurse)\b/i.test(t) && !/(plan|einkauf)/i.test(t)){
       await loadStocks(); return;
+    }
+    if(/\b(wetter|temperatur)\b/i.test(t) && !/(plan|einkauf)/i.test(t)){
+      const cityMatch=t.match(/(?:in|für|fuer)\s+([A-Za-zÀ-ÿ .'-]{2,60})/i);
+      await loadWeatherV2(cityMatch?.[1]?.trim() || "Luxembourg"); return;
     }
     if(/(öffne|oeffne|zeige).{0,20}(einkaufsliste|einkaufs\s*liste)/i.test(t)){
       location.href="einkaufsliste.html"; return;
@@ -827,7 +1348,7 @@ $$('nav button').forEach(btn=>{
   if(label==='PLANS') btn.onclick=()=>location.href='plans.html';
   if(label==='TASKS') btn.onclick=()=>location.href='task.html';
   if(label==='SHOP') btn.onclick=()=>location.href='einkaufsliste.html';
-  if(label==='SETUP') btn.onclick=()=>show(`CLOUD ${cloud.cfg.projectId} // USER ${currentUser?.email||""}`);
+  if(label==='SETUP') btn.onclick=()=>location.href='diagnostics.html';
 });
 
 const newsBtn=$("#newsBtn");
@@ -894,23 +1415,25 @@ if(SR&&voiceBtn){
   recognition.continuous=false;
   recognition.interimResults=true;
   recognition.maxAlternatives=1;
+  let completedVoiceText="";
 
   recognition.onstart=()=>{
+    completedVoiceText="";
     voiceBtn.classList.add('listening');
     if(voiceStatus) voiceStatus.textContent='LISTENING';
     show('Ich höre zu...');
   };
 
-  recognition.onspeechend=()=>{
-    try{recognition.stop()}catch{}
-  };
-
   recognition.onend=()=>{
     voiceBtn.classList.remove('listening');
     if(voiceStatus) voiceStatus.textContent='STANDBY';
+    const result=completedVoiceText.trim();
+    completedVoiceText="";
+    if(result){ show(`Gehört: ${result}`); command(result); }
   };
 
   recognition.onerror=e=>{
+    completedVoiceText="";
     voiceBtn.classList.remove('listening');
     if(voiceStatus) voiceStatus.textContent='ERROR';
     const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -937,10 +1460,7 @@ if(SR&&voiceBtn){
       if(e.results[i].isFinal) finalText+=text;
     }
     if(input) input.value=transcript.trim();
-    if(finalText.trim()){
-      show(`Gehört: ${finalText.trim()}`);
-      command(finalText.trim());
-    }
+    if(finalText.trim()) completedVoiceText=finalText.trim();
   };
 
   voiceBtn.onclick=async()=>{
@@ -985,4 +1505,80 @@ window.addEventListener("pageshow",()=>{
 
 window.addEventListener("error",(event)=>{
   console.error("[IRON/Web] Unbehandelter Fehler:", event.error || event.message);
+});
+
+window.command = command;
+
+async function loadWeatherV2(city="Luxembourg"){
+  try{
+    const data=await fetchIronJSON(`/api/weather?city=${encodeURIComponent(city)}`);
+    const c=data.current||{};
+    const text=`${data.location||city}: ${c.temperature_2m ?? "?"}°C, gefühlt ${c.apparent_temperature ?? "?"}°C, Luftfeuchtigkeit ${c.relative_humidity_2m ?? "?"}%`;
+    if(typeof show==="function") show(text);
+    if(typeof speak==="function") speak(text);
+    return data;
+  }catch(e){
+    if(typeof show==="function") show("Wetter konnte nicht geladen werden: "+(e?.message||e));
+    throw e;
+  }
+}
+window.loadWeatherV2=loadWeatherV2;
+
+
+/* IRON Android V3: dedicated public-data loaders.
+   Shopping/Appwrite AI is intentionally untouched. */
+const IRON_V3_CLOUD = 'https://starter-function-4j4o.fra.appwrite.run';
+
+async function ironV3Get(path){
+  const r = await fetch(IRON_V3_CLOUD + path, {
+    method:'GET',
+    headers:{'Accept':'application/json'},
+    cache:'no-store'
+  });
+  const raw = await r.text();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch { throw new Error(`Cloud-Antwort ist kein JSON (HTTP ${r.status}).`); }
+  if(!r.ok || data?.ok === false) throw new Error(data?.error || `HTTP ${r.status}`);
+  return data;
+}
+
+async function ironV3News(){
+  const data=await ironV3Get('/api/news');
+  console.log('[IRON V3 NEWS]',data);
+  return data;
+}
+async function ironV3Stocks(symbols='AAPL,MSFT,NVDA,TSLA'){
+  const data=await ironV3Get('/api/stocks?symbols='+encodeURIComponent(symbols));
+  console.log('[IRON V3 STOCKS]',data);
+  return data;
+}
+async function ironV3Weather(city='Luxembourg'){
+  const data=await ironV3Get('/api/weather?city='+encodeURIComponent(city));
+  console.log('[IRON V3 WEATHER]',data);
+  return data;
+}
+window.ironV3News=ironV3News;
+window.ironV3Stocks=ironV3Stocks;
+window.ironV3Weather=ironV3Weather;
+
+
+window.addEventListener("iron-cloud-voice-error", (event) => {
+  const msg = event?.detail?.message || "Cloud Voice nicht verfügbar";
+  console.error("[IRON] Eigene Stimme nicht verfügbar:", msg);
+  // Do not replace the AI answer: it remains visible in the HUD.
+  const status = document.querySelector("#statusText, #status, .status-text");
+  if (status) status.textContent = "IRON Voice momentan nicht verfügbar – Antwort bleibt als Text sichtbar.";
+});
+
+window.addEventListener("iron-app-resume",()=>{
+  if(gmailAccessToken) loadGmailInbox().catch(()=>{});
+});
+
+document.addEventListener("DOMContentLoaded",()=>{
+  const path=(location.pathname||"").toLowerCase();
+  if(path.includes("photos")){
+    const refresh=$("#photoRefreshBtn"); if(refresh) refresh.onclick=()=>renderPhotoLibrary();
+    const upload=$("#photoUploadBtn"); if(upload) upload.onclick=()=>uploadPhotoLibraryFile().catch(e=>show("Upload-Fehler: "+e.message));
+  }
 });

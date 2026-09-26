@@ -1,0 +1,117 @@
+/* Browser adapter for the Android UI. No native device permissions are assumed. */
+(() => {
+  'use strict';
+  let playing = null;
+  const CLOUD = window.IRON_APPWRITE?.functionDomain || 'https://starter-function-4j4o.fra.appwrite.run';
+
+  async function speak(value) {
+    const text = String(value ?? '').replace(/https?:\/\/\S+/gi, ' Link ').replace(/\s+/g, ' ').trim();
+    if (!text) return;
+    try {
+      const response = await fetch(CLOUD + '/api/tts', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text })
+      });
+      const data = await response.json();
+      if (!response.ok || !data?.ok || !data?.audio_base64) {
+        throw new Error(data?.error || 'Sprachausgabe derzeit nicht verfügbar.');
+      }
+      if (playing) { playing.pause(); playing = null; }
+      const mime = /^audio\/(?:mpeg|mp3|wav|ogg)$/i.test(data.mime_type || '') ? data.mime_type : 'audio/mpeg';
+      const audio = new Audio(`data:${mime};base64,${data.audio_base64}`);
+      playing = audio;
+      await new Promise((resolve, reject) => {
+        audio.onended = resolve;
+        audio.onerror = () => reject(new Error('Audio konnte nicht abgespielt werden.'));
+        audio.play().catch(reject);
+      });
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('iron-cloud-voice-error', {
+        detail: { message: String(error?.message || error) }
+      }));
+      console.warn('[IRON Web Voice]', error);
+    } finally {
+      playing = null;
+    }
+  }
+
+  function icsValue(value) {
+    return String(value ?? '').replace(/[\r\n]+/g, ' ').replace(/\\/g, '\\\\')
+      .replace(/;/g, '\\;').replace(/,/g, '\\,');
+  }
+  function icsTime(date) { return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+  function downloadCalendarEvent(event) {
+    const start = new Date(event?.start);
+    if (Number.isNaN(start.getTime())) throw new Error('Kein gültiger Termin vorhanden.');
+    let end = new Date(event?.end);
+    if (Number.isNaN(end.getTime()) || end <= start) end = new Date(start.getTime() + 60 * 60 * 1000);
+    const data = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//IRON//WEB//DE', 'BEGIN:VEVENT',
+      `UID:${Date.now()}-${Math.random().toString(36).slice(2)}@iron-web`,
+      `DTSTAMP:${icsTime(new Date())}`, `DTSTART:${icsTime(start)}`, `DTEND:${icsTime(end)}`,
+      `SUMMARY:${icsValue(event.title || 'IRON Termin')}`,
+      `DESCRIPTION:${icsValue(event.description || '')}`,
+      `LOCATION:${icsValue(event.location || '')}`,
+      'END:VEVENT', 'END:VCALENDAR', ''
+    ].join('\r\n');
+    const url = URL.createObjectURL(new Blob([data], { type: 'text/calendar;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = 'IRON-Termin.ics';
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  async function ironRouteSelfCheck() {
+    const paths = ['/api/status', '/api/world-news?country=Luxembourg'];
+    const result = [];
+    for (const path of paths) {
+      try {
+        const res = await fetch(CLOUD + path, { cache: 'no-store' });
+        const data = await res.json();
+        result.push({ route: path, http: res.status, ok: res.ok && data?.ok !== false,
+          source: data?.source || null });
+      } catch (error) {
+        result.push({ route: path, ok: false, error: String(error?.message || error) });
+      }
+    }
+    return { website: location.origin, tests: result };
+  }
+
+  window.IRONMobile = Object.freeze({ isNative: false, speak });
+  window.IRONWeb = Object.freeze({ downloadCalendarEvent });
+  window.ironRouteSelfCheck = ironRouteSelfCheck;
+
+  // The Android globe uses the native speech bridge for its own voice button.
+  // Connect that same button to browser speech recognition on GitHub Pages.
+  if (window.IRON_STATIC_WEB) {
+    const button = document.getElementById('voiceBtn');
+    const state = document.getElementById('status');
+    const BrowserSpeech = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (button && BrowserSpeech) {
+      let listening = false;
+      const recognition = new BrowserSpeech();
+      recognition.lang = 'de-DE';
+      recognition.interimResults = true;
+      recognition.continuous = false;
+      let transcript = '';
+      recognition.onstart = () => { listening = true; transcript = ''; button.textContent = '🎙 Ich höre zu…'; };
+      recognition.onresult = event => {
+        transcript = Array.from(event.results).map(result => result[0]?.transcript || '').join(' ').trim();
+        if (state && transcript) state.textContent = `Gehört: ${transcript}`;
+      };
+      recognition.onend = () => {
+        listening = false; button.textContent = '🎙 Land sprechen';
+        if (transcript && typeof window.command === 'function') window.command(transcript);
+      };
+      recognition.onerror = event => {
+        transcript = '';
+        if (state) state.textContent = `Spracherkennung: ${event.error || 'nicht verfügbar'}. Du kannst ein Land auch eintippen.`;
+      };
+      button.onclick = () => { try { listening ? recognition.stop() : recognition.start(); }
+        catch (error) { if (state) state.textContent = 'Mikrofon konnte nicht gestartet werden.'; } };
+    } else if (button) {
+      button.onclick = () => { if (state) state.textContent = 'Browser-Spracherkennung ist nicht verfügbar. Bitte ein Land eintippen.'; };
+    }
+  }
+})();
