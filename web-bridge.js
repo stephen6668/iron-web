@@ -82,6 +82,17 @@
   window.IRONWeb = Object.freeze({ downloadCalendarEvent });
   window.ironRouteSelfCheck = ironRouteSelfCheck;
 
+  // The world view owns its own voice command function. Give it the same
+  // explicit SMS navigation as the other IRON Web screens.
+  if (window.IRON_STATIC_WEB && typeof window.command === 'function') {
+    const previous = window.command;
+    window.command = function (spoken) {
+      const sms = String(spoken||'').match(/^(?:iron[,\s]*)?(?:sende|schicke)\s+(?:eine?\s+)?sms\s+an\s+(\+?[0-9\s()-]{5,24})\s+(?:mit\s+(?:dem\s+)?text|text)\s+(.+)$/i);
+      if (sms) { sessionStorage.setItem('ironSmsDraft',JSON.stringify({number:sms[1].replace(/[\s()-]/g,''),message:sms[2].trim()}));location.href='sms.html'; return; }
+      return previous(spoken);
+    };
+  }
+
   // The Android globe uses the native speech bridge for its own voice button.
   // Connect that same button to browser speech recognition on GitHub Pages.
   if (window.IRON_STATIC_WEB) {

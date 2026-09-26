@@ -1,17 +1,17 @@
-# IRON Website – Oberfläche der Android-Version V6.5
+# IRON Website – Oberfläche der Android-Version V6.7
 
-Diese statische Website enthält dieselben acht Ansichten und dieselbe
+Diese statische Website enthält dieselben neun Ansichten und dieselbe
 Gestaltung wie die Android-App: HOME, HUD, WELT / NEWS, FOTOS, PLÄNE,
-EINKAUF, TASKS und DIAGNOSE. Das Hamburger-Menü zeigt alle acht zugleich.
+EINKAUF, TASKS, SMS und DIAGNOSE. Das Hamburger-Menü zeigt alle neun zugleich.
 Die Seite arbeitet mit demselben Appwrite-Projekt und derselben IRON-
 Cloud-Funktion wie die App.
 
-**Vor einer öffentlichen Veröffentlichung:** Die bestehende Cloud-Funktion
-V3.4.0 prüft bei einigen privaten Bild- und Gesprächsrouten selbst noch
+**Vor einer öffentlichen Veröffentlichung:** Die Cloud-Funktion
+V3.6.0 prüft bei einigen älteren privaten Bild- und Gesprächsrouten selbst noch
 keinen Benutzer. Die Anmeldung in der Website allein schützt diese Routen
 nicht. Richte zuerst eine serverseitige Zugriffskontrolle für diese
-Cloud-Routen ein und prüfe die Appwrite-Berechtigungen. Diese ZIP verändert
-die laufende Cloud-Funktion und den PC-Agenten nicht.
+Cloud-Routen ein und prüfe die Appwrite-Berechtigungen. Die neuen SMS-Routen
+prüfen serverseitig das Appwrite-Konto. Diese ZIP enthält das Cloud-Update.
 
 ## Auf GitHub Pages veröffentlichen
 
@@ -29,7 +29,8 @@ die laufende Cloud-Funktion und den PC-Agenten nicht.
 5. Für die Google-Mail-Verbindung die Web-Origin
    `https://DEIN-NAME.github.io` im bestehenden Google OAuth Client
    autorisieren. Falls du Gmail dort nicht verwendest, ist dieser Schritt
-   unnötig. Die Cloud-Funktion V3.4.0 muss für Ländernews bereitstehen.
+   unnötig. Die Cloud-Funktion V3.6.0 muss für Ländernews und Web-SMS
+   aktualisiert werden.
 
 Keine API-Schlüssel, Passwortdateien oder PC-Gedächtnisdaten hochladen.
 Ein GitHub-Pages-Auftritt ist öffentlich abrufbar; erst mit Zugriffskontrolle
@@ -44,8 +45,11 @@ in der Cloud-Funktion können die privaten Cloud-Routen geschützt werden.
 - Sprachbefehle benötigen Browserunterstützung und Mikrofonfreigabe. Die
   Sprachausgabe nutzt die vorhandene IRON-Cloud-Stimme.
 - Kalenderbefehle laden eine `.ics`-Datei herunter, die du im Kalender
-  übernehmen kannst. Ein statischer Browser-Tab verschickt keine echten SMS
-  und kann keine Android-Hintergrundbenachrichtigungen ausführen.
+  übernehmen kannst. Web-SMS laufen über die angemeldete IRON-Cloud zur
+  Android-App; nur das Telefon kann sie tatsächlich versenden. Solange die
+  App geschlossen ist, bleibt der Auftrag wartend. Die Website zeigt den
+  Status nach Rückmeldung des Telefons. Ein statischer Browser-Tab kann
+  keine Android-Hintergrundbenachrichtigungen ausführen.
 - Der PC-Agent kann nur Aufgaben übernehmen, wenn er zu Hause läuft und
   mit demselben Appwrite-Projekt verbunden ist.
 

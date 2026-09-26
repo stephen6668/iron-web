@@ -7,6 +7,7 @@
     ["plans.html","◫","PLÄNE"],
     ["einkaufsliste.html","□","EINKAUF"],
     ["task.html","✓","TASKS"],
+    ["sms.html","✉","SMS"],
     ["diagnostics.html","⚙","DIAGNOSE"]
   ];
 
