@@ -30,7 +30,7 @@ async function run(){const out={app:'IRON Web V1.0',function:BASE,time:new Date(
 $('#all').onclick=run;
 $('#copy').onclick=async()=>{const t=$('#result').textContent;try{await navigator.clipboard.writeText(t);alert('Diagnose kopiert.')}catch{alert('Kopieren nicht möglich. Markiere den Text manuell.')}};
 </script>
-<script src="web-bridge.js?v=100"></script>
+<script src="web-bridge.js?v=111"></script>
 <script src="iron-menu.js?v=690"></script>
 <script>
 document.getElementById('routeCheck').onclick=async()=>{const out=document.getElementById('result');out.textContent='Teste...';try{out.textContent=JSON.stringify(await window.ironRouteSelfCheck(),null,2)}catch(e){out.textContent=e.stack||e.message}};

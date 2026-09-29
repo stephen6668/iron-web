@@ -1577,6 +1577,13 @@ window.addEventListener("iron-cloud-voice-error", (event) => {
   if (status) status.textContent = "IRON Voice momentan nicht verfügbar – Antwort bleibt als Text sichtbar.";
 });
 
+window.addEventListener("iron-web-voice-error", (event) => {
+  const status = document.querySelector("#statusText, #status, .status-text");
+  if (status) status.textContent =
+    "Browser-Stimme blockiert. Klicke unten rechts auf STIMME AUS und dann auf STIMME AN.";
+  console.warn("[IRON Web Voice]", event?.detail?.message || "Sprachausgabe fehlgeschlagen");
+});
+
 window.addEventListener("iron-app-resume",()=>{
   if(gmailAccessToken) loadGmailInbox().catch(()=>{});
 });
