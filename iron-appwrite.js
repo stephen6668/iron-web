@@ -9,6 +9,7 @@
     tables: Object.freeze({
       tasks: "tasks",
       plans: "plans",
+      ideas: "ideas",
       pcCommands: "pccommands",
       pcStatus: "pc_status"
     }),

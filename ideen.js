@@ -1,10 +1,14 @@
 (() => {
   'use strict';
   const KEY = 'iron_web_ideen_v1';
+  const MIGRATED = 'iron_web_ideen_appwrite_migrated_v1';
   const STATUS = {neu:'NEU',arbeit:'IN ARBEIT',fertig:'UMGESETZT'};
   const $ = id => document.getElementById(id);
   let ideas = [];
   let editing = null;
+  let cloud = null;
+  let user = null;
+  let busy = false;
 
   function notice(message, error=false) {
     $('ideaNotice').textContent = message;
@@ -16,7 +20,7 @@
     const title = String(entry.title || '').trim().slice(0,100);
     if (!title) return null;
     return {
-      id: String(entry.id || makeId()).slice(0,100),
+      id: String(entry.id || makeId()).slice(0,36),
       title,
       description: String(entry.description || '').trim().slice(0,1500),
       category: String(entry.category || '').trim().slice(0,40),
@@ -30,7 +34,7 @@
       ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
-  function load() {
+  function loadLocal() {
     try {
       const stored = JSON.parse(localStorage.getItem(KEY) || '[]');
       if (!Array.isArray(stored)) throw new Error('Ungültiges Ideenformat');
@@ -41,15 +45,55 @@
     }
   }
 
-  function persist(next, message) {
+  function persistLocal(next, message) {
+    ideas = next;
+    render();
     try {
       localStorage.setItem(KEY,JSON.stringify(next));
-      ideas = next;
       notice(message);
-      render();
       return true;
     } catch (_) {
-      notice('Speichern fehlgeschlagen. Prüfe, ob der Browserspeicher verfügbar ist.',true);
+      notice('Appwrite geladen; lokale Zwischenspeicherung im Browser ist gesperrt.',true);
+      return false;
+    }
+  }
+
+  function rowData(item) {
+    return {title:item.title,description:item.description,
+      category:item.category,status:item.status};
+  }
+
+  function fromRow(row) {
+    return normalise({id:row.$id,title:row.title,description:row.description,
+      category:row.category,status:row.status,
+      updatedAt:Date.parse(row.$updatedAt || row.$createdAt) || Date.now()});
+  }
+
+  async function refreshCloud() {
+    if (!cloud || busy) return;
+    const rows = await cloud.list(cloud.cfg.tables.ideas,[cloud.Query.limit(500)]);
+    persistLocal(rows.map(fromRow).filter(Boolean),'Mit Appwrite synchronisiert.');
+  }
+
+  async function saveCloud(entry, isEdit=false) {
+    if (!cloud || !user) throw new Error('Bitte zuerst auf der IRON-Startseite anmelden.');
+    if (isEdit) await cloud.update(cloud.cfg.tables.ideas,entry.id,rowData(entry));
+    else await cloud.create(cloud.cfg.tables.ideas,rowData(entry),entry.id,
+      cloud.userRowPermissions(user.$id));
+  }
+
+  async function withCloud(action, success) {
+    if (busy) return false;
+    busy = true;
+    try {
+      await action();
+      busy = false;
+      await refreshCloud();
+      notice(success);
+      return true;
+    } catch (error) {
+      busy = false;
+      notice(`Appwrite: ${error.message || error}`,true);
       return false;
     }
   }
@@ -122,17 +166,16 @@
   $('ideaCancel').addEventListener('click',closeEditor);
   $('ideaSearch').addEventListener('input',render);
   $('ideaFilter').addEventListener('change',render);
-  $('ideaForm').addEventListener('submit',event=>{
+  $('ideaForm').addEventListener('submit',async event=>{
     event.preventDefault();
     const title = $('ideaTitle').value.trim();
     if (!title) { $('ideaFormMessage').textContent='Bitte gib einen Titel ein.';return; }
     const entry = normalise({id:editing||makeId(),title,
       description:$('ideaDescription').value,category:$('ideaCategory').value,
       status:$('ideaStatus').value,updatedAt:Date.now()});
-    const next = editing ? ideas.map(x=>x.id===editing?entry:x) : [entry,...ideas];
-    if (persist(next,editing?'Idee aktualisiert.':'Idee gespeichert.')) closeEditor();
+    if (await withCloud(()=>saveCloud(entry,!!editing),editing?'Idee aktualisiert.':'Idee gespeichert.')) closeEditor();
   });
-  $('ideasList').addEventListener('click',event=>{
+  $('ideasList').addEventListener('click',async event=>{
     const target = event.target.closest('button[data-action]');
     if (!target) return;
     const idea = ideas.find(x=>x.id===target.dataset.id);
@@ -140,12 +183,12 @@
     if (target.dataset.action==='edit') return openEditor(idea);
     if (target.dataset.action==='delete') {
       if (!confirm(`„${idea.title}“ wirklich löschen?`)) return;
-      persist(ideas.filter(x=>x.id!==idea.id),'Idee gelöscht.');
+      await withCloud(()=>cloud.remove(cloud.cfg.tables.ideas,idea.id),'Idee gelöscht.');
     }
     if (target.dataset.action==='next') {
       const order = ['neu','arbeit','fertig'];
       const updated = {...idea,status:order[(order.indexOf(idea.status)+1)%order.length],updatedAt:Date.now()};
-      persist(ideas.map(x=>x.id===idea.id?updated:x),'Status aktualisiert.');
+      await withCloud(()=>saveCloud(updated,true),'Status aktualisiert.');
     }
   });
 
@@ -168,11 +211,41 @@
       if (parsed?.format!=='IRON-IDEEN-1' || !Array.isArray(parsed.ideas)) throw new Error('format');
       const imported=parsed.ideas.slice(0,500).map(normalise).filter(Boolean);
       if (!imported.length) throw new Error('empty');
-      const merged=new Map(ideas.map(x=>[x.id,x]));
-      imported.forEach(x=>merged.set(x.id,x));
-      persist(Array.from(merged.values()).slice(0,500),`${imported.length} Ideen importiert.`);
+      const existing = new Set(ideas.map(x=>x.id));
+      await withCloud(async()=>{
+        for (const item of imported) {
+          if (existing.has(item.id)) await saveCloud(item,true);
+          else { await saveCloud(item,false); existing.add(item.id); }
+        }
+      },`${imported.length} Ideen importiert.`);
     } catch (_) { notice('Die Datei enthält keine gültige IRON-Ideen-Sicherung.',true); }
   });
 
-  load();render();
+  async function start() {
+    loadLocal();render();
+    cloud=window.IRONCloud;
+    if (!cloud) return notice('Appwrite konnte nicht geladen werden. Lokale Ideen bleiben sichtbar.',true);
+    try {
+      user=await cloud.currentUser();
+      if (!user) return notice('Bitte zuerst auf der IRON-Startseite anmelden.',true);
+      const previous=[...ideas];
+      const rows=await cloud.list(cloud.cfg.tables.ideas,[cloud.Query.limit(500)]);
+      const known=new Set(rows.map(x=>x.$id));
+      // One-time migration of the browser-only ideas from the previous version.
+      if (!localStorage.getItem(MIGRATED)) {
+        for (const item of previous) {
+          if (!known.has(item.id)) {
+            await saveCloud(item,false);
+            known.add(item.id);
+          }
+        }
+        localStorage.setItem(MIGRATED,'1');
+      }
+      await refreshCloud();
+      setInterval(()=>refreshCloud().catch(e=>notice(`Appwrite: ${e.message}`,true)),8000);
+    } catch (error) {
+      notice(`Appwrite nicht bereit: ${error.message || error}. Lokale Ideen bleiben erhalten.`,true);
+    }
+  }
+  start();
 })();

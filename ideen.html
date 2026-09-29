@@ -11,7 +11,7 @@
 <div class="grid"></div><div class="scanlines"></div>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">I</span><div><b>IRON</b><small>PERSONAL SYSTEM</small></div></a>
-  <div class="status"><i></i> IDEEN <b>LOKAL</b></div>
+  <div class="status"><i></i> IDEEN <b>APPWRITE LIVE</b></div>
 </header>
 <main class="ideas-page">
   <section class="ideas-heading">
@@ -51,10 +51,12 @@
     </div>
     <p id="ideaNotice" class="ideas-notice" role="status" aria-live="polite"></p>
     <div id="ideasList" class="ideas-list"></div>
-    <div class="ideas-backup"><span>Diese Ideen liegen in diesem Browser. Sichere sie bei Bedarf als Datei.</span><div><button id="ideaExport" type="button">↓ EXPORT</button><button id="ideaImport" type="button">↑ IMPORT</button></div><input id="ideaImportFile" type="file" accept=".json,application/json" hidden></div>
+    <div class="ideas-backup"><span>Ideen werden mit deinem IRON-Konto synchronisiert. Export dient als zusätzliche Sicherung.</span><div><button id="ideaExport" type="button">↓ EXPORT</button><button id="ideaImport" type="button">↑ IMPORT</button></div><input id="ideaImportFile" type="file" accept=".json,application/json" hidden></div>
   </section>
 </main>
-<script src="ideen.js?v=690" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/appwrite@27.0.0"></script>
+<script src="iron-appwrite.js?v=710"></script>
+<script src="ideen.js?v=710" defer></script>
 <script src="iron-menu.js?v=690" defer></script>
 </body>
 </html>
