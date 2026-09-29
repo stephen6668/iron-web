@@ -1,8 +1,9 @@
 # IRON Website – Oberfläche der Android-Version V6.7
 
-Diese statische Website enthält dieselben neun Ansichten und dieselbe
-Gestaltung wie die Android-App: HOME, HUD, WELT / NEWS, FOTOS, PLÄNE,
-EINKAUF, TASKS, SMS und DIAGNOSE. Das Hamburger-Menü zeigt alle neun zugleich.
+Diese statische Website enthält die bisherigen neun Ansichten im Design der
+Android-App: HOME, HUD, WELT / NEWS, FOTOS, PLÄNE, EINKAUF, TASKS, SMS und
+DIAGNOSE. Neu ist IDEEN als zehnter, aufgeräumter Bildschirm. Das Hamburger-
+Menü zeigt alle zehn zugleich.
 Die Seite arbeitet mit demselben Appwrite-Projekt und derselben IRON-
 Cloud-Funktion wie die App.
 
@@ -42,6 +43,10 @@ in der Cloud-Funktion können die privaten Cloud-Routen geschützt werden.
   Länderauswahl, Nachrichten und Zusammenfassung.
 - Eingaben, Aufgaben, Pläne, Einkaufslisten und Fotos nutzen Appwrite und
   die vorhandene Cloud-Funktion.
+- Ideen lassen sich anlegen, bearbeiten, durchsuchen, nach Status ordnen,
+  löschen und als JSON-Datei sichern oder wieder importieren. Sie werden
+  derzeit nur im lokalen Speicher dieses Browsers abgelegt und erscheinen
+  daher nicht automatisch auf anderen Geräten oder in IRON PC/Android.
 - Sprachbefehle benötigen Browserunterstützung und Mikrofonfreigabe. Die
   Sprachausgabe nutzt die vorhandene IRON-Cloud-Stimme.
 - Kalenderbefehle laden eine `.ics`-Datei herunter, die du im Kalender

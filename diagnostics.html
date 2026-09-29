@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#06111d">
 <title>IRON · Diagnose</title>
-<link rel="stylesheet" href="style.css?v=650">
+<link rel="stylesheet" href="style.css?v=690">
 <style>
 .diagnostic-box{padding:16px;margin:0 0 14px;border:1px solid #295777;border-radius:14px;background:#0b1c2ccc}
 .diagnostic-box h2{margin:0 0 8px;font-size:16px}
@@ -31,7 +31,7 @@ $('#all').onclick=run;
 $('#copy').onclick=async()=>{const t=$('#result').textContent;try{await navigator.clipboard.writeText(t);alert('Diagnose kopiert.')}catch{alert('Kopieren nicht möglich. Markiere den Text manuell.')}};
 </script>
 <script src="web-bridge.js?v=100"></script>
-<script src="iron-menu.js?v=650"></script>
+<script src="iron-menu.js?v=690"></script>
 <script>
 document.getElementById('routeCheck').onclick=async()=>{const out=document.getElementById('result');out.textContent='Teste...';try{out.textContent=JSON.stringify(await window.ironRouteSelfCheck(),null,2)}catch(e){out.textContent=e.stack||e.message}};
 </script>

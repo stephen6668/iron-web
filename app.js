@@ -1218,6 +1218,9 @@ async function command(t){
   const sms=t.match(/^(?:iron[,\s]*)?(?:sende|schicke)\s+(?:eine?\s+)?sms\s+an\s+(\+?[0-9\s()-]{5,24})\s+(?:mit\s+(?:dem\s+)?text|text)\s+(.+)$/i);
   if(sms){sessionStorage.setItem('ironSmsDraft',JSON.stringify({number:sms[1].replace(/[\s()-]/g,''),message:sms[2].trim()}));location.href='sms.html';return;}
   if(/^(?:iron[,\s]*)?(?:öffne|oeffne|zeige)\s+(?:die\s+)?sms(?:-seite)?$/i.test(t)){location.href='sms.html';return;}
+  if(/\b(?:öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\bideen?(?:-seite)?\b/i.test(t)){
+    location.href='ideen.html';return;
+  }
   if(/was gibt es neues|was ist neu|welt(?:karte|nachrichten|news)?|globus|3d erde/i.test(t)
      || /(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+[A-Za-zÀ-ÿ]/i.test(t)){
     const country=t.match(/(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+(.+?)\s*[.!?]?$/i);
