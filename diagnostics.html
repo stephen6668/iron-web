@@ -21,12 +21,12 @@
 <section class="diagnostic-box"><h2>Prüfung</h2><div class="diagnostic-actions"><button id="routeCheck">ROUTEN TESTEN</button><button id="all">ALLE TESTEN</button><button id="copy">ERGEBNIS KOPIEREN</button></div><pre id="result">Bereit.</pre></section>
 </main>
 <script src="https://cdn.jsdelivr.net/npm/appwrite@27.0.0"></script>
-<script src="iron-appwrite.js?v=650"></script>
+<script src="iron-appwrite.js?v=2312"></script>
 <script>
 const C=window.IRONCloud,$=s=>document.querySelector(s);const BASE=C?.cfg?.functionDomain||'';
 $('#base').textContent=BASE||'Keine Cloud-Funktion konfiguriert';
 async function get(path){const started=performance.now();try{const r=await fetch(BASE+path,{cache:'no-store'}),raw=await r.text();let data;try{data=JSON.parse(raw)}catch{}return {route:path,http:r.status,ok:r.ok&&data?.ok!==false,ms:Math.round(performance.now()-started),source:data?.source||null,preview:data?JSON.stringify(data).slice(0,220):raw.slice(0,220)}}catch(e){return {route:path,ok:false,error:e.message}}}
-async function run(){const out={app:'IRON Web V1.0',function:BASE,time:new Date().toISOString(),tests:[]};for(const route of ['/api/status','/api/news','/api/stocks?symbols=AAPL','/api/weather?city=Luxembourg'])out.tests.push(await get(route));try{const u=await C.currentUser();if(!u)out.tests.push({route:'/api/chat',ok:false,error:'Nicht angemeldet'});else{const started=performance.now(),reply=await C.askAI('Antworte nur mit: IRON CLOUD OK');out.tests.push({route:'/api/chat',ok:true,ms:Math.round(performance.now()-started),preview:String(reply).slice(0,220)})}}catch(e){out.tests.push({route:'/api/chat',ok:false,error:e.message})}$('#result').textContent=JSON.stringify(out,null,2);return out}
+async function run(){const out={app:'IRON Web V23.12 Groq',function:BASE,time:new Date().toISOString(),tests:[]};for(const route of ['/api/health','/api/status','/api/news','/api/stocks?symbols=AAPL','/api/weather?city=Luxembourg'])out.tests.push(await get(route));try{const u=await C.currentUser();if(!u)out.tests.push({route:'/api/chat',ok:false,error:'Nicht angemeldet'});else{const started=performance.now(),reply=await C.askAI('Antworte nur mit: IRON CLOUD OK');out.tests.push({route:'/api/chat',ok:true,ms:Math.round(performance.now()-started),model:window.IRONLastAIModel,preview:String(reply).slice(0,220)})}}catch(e){out.tests.push({route:'/api/chat',ok:false,error:e.message})}$('#result').textContent=JSON.stringify(out,null,2);return out}
 $('#all').onclick=run;
 $('#copy').onclick=async()=>{const t=$('#result').textContent;try{await navigator.clipboard.writeText(t);alert('Diagnose kopiert.')}catch{alert('Kopieren nicht möglich. Markiere den Text manuell.')}};
 </script>
