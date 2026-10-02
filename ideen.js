@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const KEY = 'iron_web_ideen_v1';
-  const MIGRATED = 'iron_web_ideen_appwrite_migrated_v1';
+  const MIGRATED = window.IRONLocalDataActive ? 'iron_web_ideen_pc_migrated_v1' : 'iron_web_ideen_appwrite_migrated_v1';
   const STATUS = {neu:'NEU',arbeit:'IN ARBEIT',fertig:'UMGESETZT'};
   const $ = id => document.getElementById(id);
   let ideas = [];
@@ -72,7 +72,7 @@
   async function refreshCloud() {
     if (!cloud || busy) return;
     const rows = await cloud.list(cloud.cfg.tables.ideas,[cloud.Query.limit(500)]);
-    persistLocal(rows.map(fromRow).filter(Boolean),'Mit Appwrite synchronisiert.');
+    persistLocal(rows.map(fromRow).filter(Boolean),'Daten synchronisiert.');
   }
 
   async function saveCloud(entry, isEdit=false) {
@@ -242,9 +242,9 @@
         localStorage.setItem(MIGRATED,'1');
       }
       await refreshCloud();
-      setInterval(()=>refreshCloud().catch(e=>notice(`Appwrite: ${e.message}`,true)),8000);
+      setInterval(()=>refreshCloud().catch(e=>notice(`Datenverbindung: ${e.message}`,true)),8000);
     } catch (error) {
-      notice(`Appwrite nicht bereit: ${error.message || error}. Lokale Ideen bleiben erhalten.`,true);
+      notice(`Datenverbindung nicht bereit: ${error.message || error}. Lokale Ideen bleiben erhalten.`,true);
     }
   }
   start();

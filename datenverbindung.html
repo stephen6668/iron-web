@@ -1,0 +1,25 @@
+<!doctype html><html lang="de"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IRON – Datenverbindung</title>
+<style>body{margin:0;background:#050d16;color:#d7f7ff;font:16px system-ui}main{max-width:560px;margin:8vh auto;padding:24px}h1{color:#70e6ff}label{display:block;margin:22px 0 8px}input{box-sizing:border-box;width:100%;padding:13px;color:inherit;background:#10212d;border:1px solid #315768;border-radius:8px}button,a{display:inline-block;margin:16px 8px 0 0;padding:12px;border-radius:8px;background:#12334b;color:#adf1ff;border:1px solid #2b6680;text-decoration:none}p{line-height:1.6}#status{white-space:pre-wrap}</style>
+<main><h1>Deine PC-Daten</h1><p>Tasks, Pläne, Einkaufslisten und Ideen werden auf deinem PC gespeichert. IRON und Tailscale müssen auf dem PC laufen. Auf diesem Gerät ebenfalls Tailscale einschalten.</p>
+<label for="url">Private HTTPS-Adresse deines PCs</label><input id="url" placeholder="https://dein-pc.dein-netz.ts.net" autocomplete="off">
+<label for="token">Verbindungsschlüssel</label><input id="token" type="password" autocomplete="off"><p>Den Schlüssel nur hier eintragen. Niemals in GitHub-Dateien veröffentlichen.</p>
+<button id="save">Prüfen und verbinden</button><button id="disable">Zur bisherigen Cloud wechseln</button><a href="index.html">Zurück zu IRON</a><p id="status"></p></main>
+<script>
+const key='iron_local_data_connection_v1';const url=document.getElementById('url'),token=document.getElementById('token'),status=document.getElementById('status');
+try{const old=JSON.parse(localStorage.getItem(key)||'{}');url.value=old.url||'';token.value=old.token||'';}catch{}
+document.getElementById('save').onclick=async()=>{
+ status.textContent='Verbindung wird geprüft…';
+ try{
+  const target=new URL(url.value.trim());
+  if(target.protocol!=='https:'&&!(target.protocol==='http:'&&['127.0.0.1','localhost'].includes(target.hostname)))throw new Error('Für den Gerätezugriff bitte die private HTTPS-Adresse verwenden.');
+  if(target.username||target.password||target.search||target.hash||target.pathname!=='/')throw new Error('Nur die Server-Adresse ohne Pfad eingeben.');
+  if(token.value.trim().length<32)throw new Error('Der vollständige Verbindungsschlüssel fehlt.');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),12000);let response;
+  try{response=await fetch(target.origin+'/v1/health',{headers:{Authorization:'Bearer '+token.value.trim()},signal:controller.signal});}finally{clearTimeout(timer);}
+  const data=await response.json();if(!response.ok||!data.ok||data.service!=='IRON Local Data')throw new Error(data.error||'Falscher Server');
+  localStorage.setItem(key,JSON.stringify({url:target.origin,token:token.value.trim()}));
+  status.textContent='Verbunden. Tasks, Pläne und Ideen nutzen jetzt deinen PC. Andere Funktionen behalten ihre bisherigen Verbindungen. Öffne anschließend den gewünschten Bildschirm neu.';
+ }catch(e){status.textContent='Nicht verbunden: '+(e.name==='AbortError'?'PC nicht erreichbar. IRON, Tailscale und die Adresse prüfen.':e.message);}
+};
+document.getElementById('disable').onclick=()=>{localStorage.removeItem(key);status.textContent='PC-Verbindung deaktiviert. Die PC-Daten wurden nicht gelöscht. Für die Cloud gelten wieder deren vorhandene Daten.';};
+</script></html>
