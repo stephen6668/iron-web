@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>IRON · Welt · Android</title>
-<link rel="stylesheet" href="style.css?v=690">
+<link rel="stylesheet" href="style.css?v=2426">
 <script src="https://unpkg.com/globe.gl"></script>
 <style>
 :root{--cyan:#85dafa;--soft:#457e9f;--bg:#061625;--panel:rgba(6,24,41,.94)}
@@ -32,7 +32,7 @@ body > footer{position:fixed;z-index:3;left:24px;bottom:22px;color:#8eb7c9;font-
  .toolbar{left:12px;right:auto;width:min(260px,43vw);top:60px}.nav{grid-template-columns:repeat(4,1fr)}
  .panel{right:12px;left:auto;top:60px;bottom:10px;width:min(270px,43vw);height:auto;min-height:0}
 }
-</style></head><body>
+</style><link rel="stylesheet" href="iron-web-polish.css?v=2426"></head><body>
 <div id="globe"></div>
 <header><div><div class="brand">IR<span>O</span>N</div><div class="label">WORLD · LIVE NEWS</div></div><div class="label" id="modeLabel">3D WELT</div></header>
 <div class="toolbar"><label for="countryInput">Land auswählen</label><div class="search"><input id="countryInput" list="countryList" placeholder="z. B. Luxemburg" autocomplete="off" aria-label="Land suchen"><datalist id="countryList"></datalist><button onclick="selectTyped()">Zeigen</button></div>
@@ -40,7 +40,7 @@ body > footer{position:fixed;z-index:3;left:24px;bottom:22px;color:#8eb7c9;font-
 <button id="voiceBtn" style="width:100%;margin-top:10px">🎙 Land sprechen</button><p class="help">Ziehen: drehen · Mausrad: zoomen · Rechtsklick ziehen: verschieben · Land anklicken: Nachrichten. Pfeiltasten und +/− funktionieren ebenfalls.</p></div>
 <aside class="panel"><h1 id="selected">DIE WELT</h1><div class="status" id="status">Weltkarte wird geladen…</div><div class="actions" id="actions" hidden><button onclick="readAloud()">▶ Vorlesen</button></div><div id="voiceSummary" class="summary" aria-live="polite"></div><div id="articles"></div></aside>
 <footer>30 FPS · 70 % Auflösung · Ländernews nur auf Auswahl</footer>
-<script>window.IRON_STATIC_WEB=true;window.IRON_MOBILE=true;</script>
+<script src="iron-local-data.js?v=2426"></script><script>window.IRON_STATIC_WEB=true;window.IRON_MOBILE=true;</script>
 <script>
 const statusEl=document.getElementById('status'),articlesEl=document.getElementById('articles'),selectedEl=document.getElementById('selected'),input=document.getElementById('countryInput'),actions=document.getElementById('actions'),summaryEl=document.getElementById('voiceSummary');
 let features=[],selectedFeature=null,selectedCountry='',latestArticles=[],controlSeq=-1,loadId=0;
@@ -77,7 +77,7 @@ function renderMode(){
 }
 function navigate(op){if(!globe)return;let p=globe.pointOfView();globe.controls().autoRotate=false;if(op==='reset'){resetView();return}if(op==='in'||op==='out'){p.altitude=Math.max(.13,Math.min(3.6,p.altitude*(op==='in'?.73:1.37)))}else{if(op==='left')p.lng-=16;if(op==='right')p.lng+=16;if(op==='up')p.lat=Math.min(87,p.lat+12);if(op==='down')p.lat=Math.max(-87,p.lat-12)}globe.pointOfView(p,500)}
 async function notifySelection(){if(window.IRON_MOBILE)return;try{await fetch('/api/world/selected',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({country:selectedCountry,articles:latestArticles})})}catch(e){}}
-async function loadNews(name,notify=true){const thisLoad=++loadId;selectedCountry=name;selectedEl.textContent=name==='World'?'DIE WELT':name.toLocaleUpperCase();statusEl.textContent='Aktuelle Meldungen werden geprüft…';articlesEl.replaceChildren();actions.hidden=true;summaryEl.textContent='';latestArticles=[];if(!window.IRON_MOBILE){await notifySelection();if(thisLoad!==loadId)return}try{let endpoint=window.IRON_MOBILE?'https://starter-function-4j4o.fra.appwrite.run/api/world-news':'/api/world/news';let response=await fetch(endpoint+'?country='+encodeURIComponent(name));let data=await response.json();if(thisLoad!==loadId)return;if(!data.ok)throw Error(data.error||'Nachrichten nicht verfügbar');if(window.IRON_MOBILE&&data.source!=='verified_publisher_rss')throw Error('Cloud-Funktion V3.6 für geprüfte Ländernews installieren.');latestArticles=data.articles||[];statusEl.textContent=latestArticles.length?`${latestArticles.length} geprüfte Meldungen · ${name}`:`Für ${name} sind derzeit keine aktuellen Meldungen aus freigegebenen Quellen verfügbar.`;articlesEl.innerHTML=latestArticles.map(a=>`<div class="article"><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a><small>${escapeHtml(a.source)} · ${escapeHtml(a.published?new Date(a.published).toLocaleString('de-DE'):'')}</small></div>`).join('');actions.hidden=!latestArticles.length;if(notify)await notifySelection()}catch(e){if(thisLoad===loadId)statusEl.textContent='Abruf fehlgeschlagen: '+e.message}}
+async function loadNews(name,notify=true){const thisLoad=++loadId;selectedCountry=name;selectedEl.textContent=name==='World'?'DIE WELT':name.toLocaleUpperCase();statusEl.textContent='Aktuelle Meldungen werden geprüft…';articlesEl.replaceChildren();actions.hidden=true;summaryEl.textContent='';latestArticles=[];if(!window.IRON_MOBILE){await notifySelection();if(thisLoad!==loadId)return}try{let data=await window.IRONLocalData.news(name);if(thisLoad!==loadId)return;if(!data.ok)throw Error(data.error||'Nachrichten nicht verfügbar');latestArticles=data.articles||[];statusEl.textContent=latestArticles.length?`${latestArticles.length} geprüfte Meldungen · ${name}`:`Für ${name} sind derzeit keine aktuellen Meldungen aus freigegebenen Quellen verfügbar.`;articlesEl.innerHTML=latestArticles.map(a=>`<div class="article"><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a><small>${escapeHtml(a.source)} · ${escapeHtml(a.published?new Date(a.published).toLocaleString('de-DE'):'')}</small></div>`).join('');actions.hidden=!latestArticles.length;if(notify)await notifySelection()}catch(e){if(thisLoad===loadId)statusEl.textContent='Abruf fehlgeschlagen: '+e.message}}
 function focusFeature(f){if(!globe||!f)return;selectedFeature=f;renderMode();let c=centroid(f);globe.controls().autoRotate=false;globe.pointOfView({...c,altitude:.95},900);input.value=germanName(f);loadNews(nameOf(f))}
 function focusCountry(s){s=String(s||'').trim();if(!s){statusEl.textContent='Bitte zuerst ein Land eingeben.';return}if(norm(s)==='world'||norm(s)==='welt'){resetView();return}let f=findFeature(s);if(f){focusFeature(f);return}const name=aliases[s.toLocaleLowerCase()]||s;selectedFeature=null;input.value=s;renderMode();loadNews(name)}
 function selectTyped(){focusCountry(input.value.trim())}
@@ -90,8 +90,8 @@ async function readAloud(){
   try{
     const mobile=Boolean(window.IRON_MOBILE);
     const url=mobile?'https://starter-function-4j4o.fra.appwrite.run/api/world-news/summary':'/api/world/speak';
-    const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({country:selectedCountry})});
-    const data=await response.json();
+    const data=await window.IRONLocalData.action('news',{country:selectedCountry});
+    const response={ok:true};
     if(requestId!==loadId||requestedCountry!==selectedCountry)return;
     if(!response.ok||!data.ok)throw Error(data.error||'Zusammenfassung nicht verfügbar');
     if(data.country&&data.country!==selectedCountry)throw Error('Die Länderauswahl hat sich geändert.');
@@ -121,6 +121,6 @@ window.command=async function(spoken){
  statusEl.textContent='Bitte ein Land nennen, zum Beispiel „Nachrichten aus Luxemburg“.';
 };
 </script>
-<script src="web-bridge.js?v=111"></script>
-<script src="iron-menu.js?v=690"></script>
-</body></html>
+<script src="web-bridge.js?v=2426"></script>
+<script src="iron-menu.js?v=2426"></script>
+<script src="iron-web-live.js?v=2426"></script></body></html>

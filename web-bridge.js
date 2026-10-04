@@ -155,21 +155,7 @@
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
-  async function ironRouteSelfCheck() {
-    const paths = ['/api/status', '/api/world-news?country=Luxembourg'];
-    const result = [];
-    for (const path of paths) {
-      try {
-        const res = await fetch(CLOUD + path, { cache: 'no-store' });
-        const data = await res.json();
-        result.push({ route: path, http: res.status, ok: res.ok && data?.ok !== false,
-          source: data?.source || null });
-      } catch (error) {
-        result.push({ route: path, ok: false, error: String(error?.message || error) });
-      }
-    }
-    return { website: location.origin, tests: result };
-  }
+  async function ironRouteSelfCheck(){try{return {website:location.origin,tests:[{route:'PC-Daten',...(await window.IRONLocalData.test())}]};}catch(e){return {tests:[{ok:false,error:e.message}]};}}
 
   window.IRONMobile = Object.freeze({ isNative: false, speak, stopSpeech });
   window.IRONWeb = Object.freeze({ downloadCalendarEvent });

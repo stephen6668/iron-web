@@ -203,6 +203,7 @@ function ensureAuthUI() {
   $("#authPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#authLogin").click(); });
 }
 async function initAuth(){
+  if(!window.IRONLocalDataActive){show("Bitte zuerst unter Datenverbindung deinen PC koppeln.");return false;}
   ensureAuthUI();
   try {
     currentUser = await cloud.currentUser();
@@ -1215,6 +1216,21 @@ async function queuePCCommand(t){
 async function command(t){
   t=(t||"").trim();
   if(!t)return;
+  if(window.IRONLocalDataActive){
+    const country=t.match(/(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+(.+?)\s*[.!?]?$/i);
+    if(/was gibt es neues|weltkarte|globus/i.test(t)||country){location.href='world.html'+(country?'?country='+encodeURIComponent(country[1]):'');return;}
+    const smsDraft=t.match(/^(?:iron[,\s]*)?(?:sende|schicke)\s+(?:eine?\s+)?sms\s+an\s+(\+?[0-9\s()-]{5,24})\s+(?:mit\s+(?:dem\s+)?text|text)\s+(.+)$/i);
+    if(smsDraft){sessionStorage.setItem('ironSmsDraft',JSON.stringify({number:smsDraft[1].replace(/[\s()-]/g,''),message:smsDraft[2].trim()}));location.href='sms.html';return;}
+    if(/^(?:iron[, :]*\s*)?(?:öffne|oeffne|zeige)\b/i.test(t)){
+      const routes=[[/\b(?:tasks?|aufgaben)\b/i,'task.html'],[/\bpläne|plaene|plans\b/i,'plans.html'],[/\bideen?\b/i,'ideen.html'],[/\bsms\b/i,'sms.html'],[/\b(?:kalender|sportplan)\b/i,'kalender.html'],[/\b(?:dokumente?|dateianalyse)\b/i,'dokumente.html'],[/\b(?:mails?|posteingang)\b/i,'mails.html'],[/\b(?:gedächtnis|erinnerungen)\b/i,'gedaechtnis.html'],[/\bbegleitmodus\b/i,'begleiter.html'],[/\bhud\b/i,'hud.html']];
+      const found=routes.find(([pattern])=>pattern.test(t));if(found){location.href=found[1];return;}
+    }
+    show('IRON am PC verarbeitet deinen Auftrag …');
+    try{const answer=await window.IRONLocalData.execute(t);show(answer);const out=document.getElementById('answerText');if(out)out.textContent=answer;window.IRONMobile?.speak?.(answer);await Promise.allSettled([renderTasksScreen(),renderPlansScreen(),renderShoppingScreen()]);}catch(e){show(e.message);}
+    return;
+  }
+  show('Bitte deinen PC unter Datenverbindung koppeln.');return;
+
   const sms=t.match(/^(?:iron[,\s]*)?(?:sende|schicke)\s+(?:eine?\s+)?sms\s+an\s+(\+?[0-9\s()-]{5,24})\s+(?:mit\s+(?:dem\s+)?text|text)\s+(.+)$/i);
   if(sms){sessionStorage.setItem('ironSmsDraft',JSON.stringify({number:sms[1].replace(/[\s()-]/g,''),message:sms[2].trim()}));location.href='sms.html';return;}
   if(/^(?:iron[,\s]*)?(?:öffne|oeffne|zeige)\s+(?:die\s+)?sms(?:-seite)?$/i.test(t)){location.href='sms.html';return;}

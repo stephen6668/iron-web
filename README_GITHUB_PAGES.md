@@ -1,63 +1,62 @@
-# IRON Website – Oberfläche der Android-Version V6.7
+# IRON Web V24.26 – mit deinem aktuellen PC verbunden
 
-Diese statische Website enthält die bisherigen neun Ansichten im Design der
-Android-App: HOME, HUD, WELT / NEWS, FOTOS, PLÄNE, EINKAUF, TASKS, SMS und
-DIAGNOSE. Neu ist IDEEN als zehnter, aufgeräumter Bildschirm. Das Hamburger-
-Menü zeigt alle zehn zugleich.
-Die Seite arbeitet mit demselben Appwrite-Projekt und derselben IRON-
-Cloud-Funktion wie die App.
+Die gesamte bestehende GitHub-Webseite bleibt enthalten. Neue Bildschirme:
+Dokumente, Kalender/Sport, Mails, Begleitmodus, Gedächtnis und Auftragsverlauf.
+Alle Bildschirme sind über das Menü erreichbar. Gestaltung bleibt dunkel/cyan,
+mit übersichtlicheren Abständen, Formularen und einer zweispaltigen Menüansicht.
 
-**Vor einer öffentlichen Veröffentlichung:** Die Cloud-Funktion
-V3.6.0 prüft bei einigen älteren privaten Bild- und Gesprächsrouten selbst noch
-keinen Benutzer. Die Anmeldung in der Website allein schützt diese Routen
-nicht. Richte zuerst eine serverseitige Zugriffskontrolle für diese
-Cloud-Routen ein und prüfe die Appwrite-Berechtigungen. Die neuen SMS-Routen
-prüfen serverseitig das Appwrite-Konto. Diese ZIP enthält das Cloud-Update.
+## Installieren
+1. IRON am PC beenden. Alle Dateien aus `PC` direkt nach `D:\iron-assistant`
+   kopieren und Programmdateien ersetzen. Persönliche Daten/Konfigurationen bleiben.
+2. Falls noch nicht eingerichtet, im bestehenden venv:
+   `python CONFIGURE_IRON_LOCAL_DATA.py`
+   Der bestehende Verbindungsschlüssel wird erhalten und angezeigt. IRON starten.
+3. Die bisherige private HTTPS-Verbindung zu Port 8787 weiterverwenden.
+   Bei bereits eingerichtetem Tailscale lautet der Serve-Aufruf am PC:
+   `tailscale serve --bg http://127.0.0.1:8787`
+   PC und Browsergerät müssen dein privates Tailscale-Netz erreichen können.
+4. Den Inhalt des Ordners `WEB` in dein Repository **iron-web** übernehmen und
+   über die bisherige GitHub-Pages-Einstellung veröffentlichen. Nicht in das
+   separate Chevalier-Roth-Shop-Repository kopieren.
+5. In IRON Web → DATENVERBINDUNG: private HTTPS-Adresse und Verbindungsschlüssel
+   eingeben → PRÜFEN UND VERBINDEN. Anschließend HOME neu laden.
+6. Diagnose öffnen und PC-Verbindung prüfen. Bei alten gecachten Dateien Strg+F5.
 
-## Auf GitHub Pages veröffentlichen
+## Was zusammenarbeitet
+- Aufgaben, Pläne, Einkauf und Ideen: dieselben lokalen PC-Daten, ohne Appwrite-DB.
+- Sprach-/Texteingaben: bestehende IRON-PC-Steuerung und dessen konfigurierte KI.
+  Die Webseite benötigt keinen eigenen Groq-/Claude-Key und keine Appwrite-Anmeldung.
+- Der Browser kann Antworten mit seiner vorhandenen Sprachausgabe vorlesen.
+- Nachrichten-Welt: nur gewähltes Land, geprüfte RSS-Quellen aus dem PC-Modul.
+  Zusammenfassung nur auf Anfrage anhand vorhandener Nachrichtenauszüge.
+- SMS: Übergabe über PC an SMSGate auf deinem Android-Handy. Die Web-Rückmeldung
+  ist keine bestätigte Mobilfunkzustellung. Versandbestätigung weiter über IRON am PC.
+  Die PC-Konfiguration bestimmt die verwendete SMSGate-SIM.
+- Dokumente: direkt binär zum PC, maximal 50 MB; Bilder 6 MB. Bestehende Analyse:
+  höchstens 20 PDF-Seiten bzw. 30.000 Zeichen. Kürzung wird gekennzeichnet.
+- Mails/Kalender: letzter vorhandener Abruf mit Zeitangabe; keine Behauptung,
+  dass ein alter Stand live neu geladen wurde. Weitere Aufträge gehen an den PC.
+- Sport: lokale Einheiten eintragen und löschen, im PC-Sportkalender vorhanden.
+- Gedächtnis: Nutzeraussagen mit Quelle, korrigieren/löschen/neue Angabe speichern.
+- Begleiter: nächsten Schritt/Entscheidung festhalten, gespeicherten Stand anzeigen,
+  vorhandene Routinen bewusst starten. Arbeitsroutine kann andere Fenster schließen.
+- Fotos: lokale Browser-Bibliothek via IndexedDB, herunterladen/löschen sowie
+  bewusst zur PC-Analyse senden. Fotos werden nicht automatisch auf andere Geräte
+  synchronisiert. Frühere Appwrite-Fotos werden nicht gelöscht oder automatisch importiert.
+- Aufträge: echte PC-Warteschlange mit Status/Ergebnis. Bei Zeitlimit oder
+  Netzwerkunterbrechung zuerst hier nachsehen, nicht blind erneut senden.
 
-1. **Nur den Inhalt dieses Ordners** in das Stammverzeichnis eines GitHub-
-   Repositorys auf dem Branch `main` hochladen. `index.html` muss direkt
-   im Stammverzeichnis stehen, nicht in einem zusätzlichen ZIP-Ordner.
-2. Im Repository `Settings → Pages → Build and deployment → Source`
-   **GitHub Actions** auswählen. Der enthaltene Workflow
-   `.github/workflows/pages.yml` veröffentlicht die Seite bei jedem Push.
-3. Die Webadresse wird `https://DEIN-NAME.github.io/REPOSITORY/`.
-4. Im bereits verwendeten Appwrite-Projekt unter **Platforms** eine
-   **Web-App** mit Hostname `DEIN-NAME.github.io` hinzufügen; für lokale
-   Entwicklung zusätzlich `localhost`. Ohne diese Freigabe kann das
-   Appwrite-Login im Browser durch CORS scheitern.
-5. Für die Google-Mail-Verbindung die Web-Origin
-   `https://DEIN-NAME.github.io` im bestehenden Google OAuth Client
-   autorisieren. Falls du Gmail dort nicht verwendest, ist dieser Schritt
-   unnötig. Die Cloud-Funktion V3.6.0 muss für Ländernews und Web-SMS
-   aktualisiert werden.
+IRON am PC und für SMS das Android-Handy müssen laufen. Unterwegs braucht dein
+Browsergerät ebenfalls die bestehende private Verbindung. Kopplungsschlüssel nur
+im eigenen Browser speichern, niemals in das öffentliche GitHub-Repository.
 
-Keine API-Schlüssel, Passwortdateien oder PC-Gedächtnisdaten hochladen.
-Ein GitHub-Pages-Auftritt ist öffentlich abrufbar; erst mit Zugriffskontrolle
-in der Cloud-Funktion können die privaten Cloud-Routen geschützt werden.
+## Prüfung
+82 lokale Python-Tests bestanden, einschließlich Authentifizierung/Origin-Prüfung,
+Web-Aktionen, binärem Dokumentupload und Länderwahl. Web-Client-Test: ein Queue-Auftrag,
+authentifizierte Abfragen, Listenfilter und binärer Upload. 17 JS-Skripte einschließlich
+HTML-Skripten syntaktisch geprüft; weitere Änderungen ebenfalls einzeln geprüft.
+Keine echte Windows-, Tailscale-, SMS- oder gerenderte Browserprüfung hier erfolgt.
+Die tatsächliche Verbindung muss nach dem Installieren auf deinen Geräten geprüft werden.
 
-## Browserfunktionen
-
-- Gleiche Navigation und Ansichten wie Android, inklusive interaktivem Globus,
-  Länderauswahl, Nachrichten und Zusammenfassung.
-- Eingaben, Aufgaben, Pläne, Einkaufslisten und Fotos nutzen Appwrite und
-  die vorhandene Cloud-Funktion.
-- Ideen lassen sich anlegen, bearbeiten, durchsuchen, nach Status ordnen,
-  löschen und als JSON-Datei sichern oder wieder importieren. Sie werden
-  derzeit nur im lokalen Speicher dieses Browsers abgelegt und erscheinen
-  daher nicht automatisch auf anderen Geräten oder in IRON PC/Android.
-- Sprachbefehle benötigen Browserunterstützung und Mikrofonfreigabe. Die
-  Sprachausgabe nutzt die vorhandene IRON-Cloud-Stimme.
-- Kalenderbefehle laden eine `.ics`-Datei herunter, die du im Kalender
-  übernehmen kannst. Web-SMS laufen über die angemeldete IRON-Cloud zur
-  Android-App; nur das Telefon kann sie tatsächlich versenden. Solange die
-  App geschlossen ist, bleibt der Auftrag wartend. Die Website zeigt den
-  Status nach Rückmeldung des Telefons. Ein statischer Browser-Tab kann
-  keine Android-Hintergrundbenachrichtigungen ausführen.
-- Der PC-Agent kann nur Aufgaben übernehmen, wenn er zu Hause läuft und
-  mit demselben Appwrite-Projekt verbunden ist.
-
-Zum lokalen Testen `python -m http.server 8000` in diesem Ordner starten und
-`http://localhost:8000/` öffnen. Ein Doppelklick auf `index.html` reicht
-für Login und Browser-APIs nicht zuverlässig aus.
+Frühere README-Dateien beschreiben historische Cloud-Versionen. Diese Anleitung
+ist für die aktuelle Verbindung maßgeblich. Kein Deployment wurde automatisch ausgeführt.

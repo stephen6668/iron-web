@@ -9,7 +9,7 @@
     ["task.html","✓","TASKS"],
     ["ideen.html","✧","IDEEN"],
     ["sms.html","✉","SMS"],
-    ["diagnostics.html","⚙","DIAGNOSE"]
+    ["dokumente.html","▤","DOKUMENTE"],["kalender.html","◷","KALENDER / SPORT"],["mails.html","✉","MAILS"],["begleiter.html","◎","BEGLEITER"],["gedaechtnis.html","◇","GEDÄCHTNIS"],["auftraege.html","✓","AUFTRÄGE"],["datenverbindung.html","↔","VERBINDUNG"],["diagnostics.html","⚙","DIAGNOSE"]
   ];
 
   function currentName(){
