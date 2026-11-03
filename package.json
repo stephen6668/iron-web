@@ -1,0 +1,17 @@
+{
+  "name": "iron-web",
+  "version": "25.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server/index.mjs",
+    "test": "node --test --test-isolation=none tests/*.test.mjs",
+    "check": "node --check server/index.mjs && node --check server/assistant.mjs && node --check server/documents.mjs && node --check server/news.mjs && node --check server/research.mjs && node --check server/ai-provider.mjs"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^5.3.2"
+  }
+}

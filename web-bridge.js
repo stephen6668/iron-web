@@ -1,12 +1,12 @@
 /* Browser adapter for the Android UI. No native device permissions are assumed. */
 (() => {
   'use strict';
-  const CLOUD = window.IRON_APPWRITE?.functionDomain || 'https://starter-function-4j4o.fra.appwrite.run';
   const VOICE_KEY = 'iron_web_voice_enabled';
   const synth = window.speechSynthesis;
   let voiceEnabled = true;
   let speechSequence = 0;
   let voiceButton = null;
+  let finishCurrentChunk = null;
   try { voiceEnabled = localStorage.getItem(VOICE_KEY) !== 'false'; } catch (_) { /* private mode */ }
 
   function voiceStatus(text) {
@@ -20,6 +20,7 @@
 
   function stopSpeech() {
     speechSequence += 1;
+    finishCurrentChunk?.();
     if (synth) synth.cancel();
     voiceStatus(voiceEnabled ? 'READY' : 'MUTED');
   }
@@ -65,9 +66,11 @@
         if (done) return;
         done = true;
         clearTimeout(timer);
+        if(finishCurrentChunk===finish)finishCurrentChunk=null;
         if (error && sequence === speechSequence) reject(error);
         else resolve(sequence === speechSequence);
       };
+      finishCurrentChunk=finish;
       utterance.onend = () => finish();
       utterance.onerror = event => finish(new Error('Browser-Stimme: ' + (event?.error || 'Wiedergabe fehlgeschlagen')));
       timer = setTimeout(() => finish(new Error('Browser hat die Sprachausgabe blockiert. Stimme-Schalter anklicken.')), 35000);
@@ -155,8 +158,10 @@
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
 
-  async function ironRouteSelfCheck(){try{return {website:location.origin,tests:[{route:'PC-Daten',...(await window.IRONLocalData.test())}]};}catch(e){return {tests:[{ok:false,error:e.message}]};}}
+  async function ironRouteSelfCheck(){try{return {website:location.origin,tests:[{route:window.IRONBackendName+'-Daten',...(await window.IRONLocalData.test())}]};}catch(e){return {tests:[{ok:false,error:e.message}]};}}
 
+  window.addEventListener('pagehide',stopSpeech);
+  document.addEventListener('visibilitychange',()=>{if(document.hidden)stopSpeech();});
   window.IRONMobile = Object.freeze({ isNative: false, speak, stopSpeech });
   window.IRONWeb = Object.freeze({ downloadCalendarEvent });
   window.ironRouteSelfCheck = ironRouteSelfCheck;

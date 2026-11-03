@@ -3,68 +3,100 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#05080d">
-<title>IRON // Personal Assistant</title>
-<link rel="stylesheet" href="style.css?v=2426">
-<link rel="stylesheet" href="iron-web-polish.css?v=2426"></head>
-<body>
-<div class="grid"></div><div class="scanlines"></div>
+<meta name="theme-color" content="#030a12">
+<title>IRON // Dein persönlicher Assistent</title>
+<meta name="description" content="Sprich mit Iron, organisiere deinen Alltag und verfolge aktuelle Nachrichten aus direkten Quellen.">
+<link rel="stylesheet" href="style.css?v=2600">
+<link rel="stylesheet" href="iron-web-polish.css?v=2600">
+<link rel="stylesheet" href="iron-mobile.css?v=2600">
+<link rel="stylesheet" href="iron-jarvis.css?v=2600">
+<link rel="stylesheet" href="iron-home.css?v=2600">
+</head>
+<body class="home-body">
 <header class="topbar">
-  <div class="brand"><span class="mark">I</span><div><b>IRON</b><small>PERSONAL SYSTEM</small></div></div>
-  <div class="status"><i></i> PC <b id="cloudStatus">CONNECTING</b></div>
+  <a class="brand" href="index.html" aria-label="Iron Startseite"><span class="mark" aria-hidden="true">I</span><span><b>IRON</b><small>PERSONAL ASSISTANT</small></span></a>
+  <div class="status"><i aria-hidden="true"></i> VERBINDUNG <b id="cloudStatus">WIRD GEPRÜFT</b></div>
 </header>
 <main>
-<section class="hero">
-  <div class="eyebrow">IRON // BEREIT</div>
-  <h1>IRON <span>ASSISTENT</span></h1>
-  <p>Sprache, Aufgaben und aktuelle Informationen an einem Ort.</p>
-  <button class="voice" id="voiceBtn"><em></em><strong>⌁</strong><small>SPRECHEN</small></button>
-  <div class="command"><span>&gt;</span><input id="commandInput" placeholder="Befehl eingeben..." autocomplete="off"><button id="sendBtn">SENDEN</button></div>
-  <div id="response">System bereit.</div>
-  <section class="answer-panel">
-    <div class="answer-head"><span>IRON ANTWORT</span><b id="speechStatus">READY</b></div>
-    <div id="answerText">Antworten von IRON erscheinen hier immer als Text – auch wenn die Sprachausgabe nicht funktioniert.</div>
-  </section>
-</section>
+  <header class="home-heading">
+    <div><div class="eyebrow">DEIN PERSÖNLICHES SYSTEM</div><h1>Dein Alltag.<br><span>Ein Gespräch entfernt.</span></h1></div>
+    <p>Sprich mit Iron. Halte Gedanken fest, plane deinen Tag und behalte die Welt im Blick. Mit eingerichtetem Cloud-Server auch ohne eingeschalteten PC.</p>
+  </header>
 
-<section>
-  <div class="title">ÜBERSICHT <i></i></div>
-  <div class="cards">
-    <button data-command="Erstelle einen Tagesplan"><b>◫</b><strong>PLÄNE</strong><small>Tages- & Wochenplanung</small></button>
-    <button data-command="Öffne meinen Sportplan"><b>◈</b><strong>SPORT</strong><small>Training & Aktivitäten</small></button>
-    <button data-command="Öffne meine Finanzen"><b>◇</b><strong>FINANZEN</strong><small>Übersicht & Planung</small></button>
-    <button onclick="location.href='einkaufsliste.html'"><b>□</b><strong>EINKAUF</strong><small>Listen & Aufgaben</small></button>
-    <button onclick="location.href='hud.html'"><b>◎</b><strong>HUD</strong><small>IRON Übersicht</small></button>
-    <button class="world-feature" onclick="location.href='world.html'"><b>◉</b><strong>WELT & NEWS</strong><small>Länder wählen und aktuelle Nachrichten ansehen</small></button>
-    <button onclick="location.href='photos.html'"><b>▣</b><strong>FOTOS</strong><small>Bilder ansehen</small></button>
-    <button onclick="location.href='ideen.html'"><b>✧</b><strong>IDEEN</strong><small>Gedanken festhalten und ordnen</small></button>
+  <div class="command-deck">
+    <section class="core-panel" aria-label="Sprachsteuerung">
+      <div class="instrument-heading"><span>01 / SPRACHVERBINDUNG</span><span>IRON CORE</span></div>
+      <div class="reactor-stage">
+        <div class="core-axis" aria-hidden="true"></div>
+        <div class="core-orbit core-orbit-a" aria-hidden="true"></div>
+        <div class="core-orbit core-orbit-b" aria-hidden="true"></div>
+        <div class="core-orbit core-orbit-c" aria-hidden="true"></div>
+        <button class="voice" id="voiceBtn" type="button" aria-label="Mit Iron sprechen" aria-pressed="false"><em aria-hidden="true"></em><strong aria-hidden="true">I</strong><small>SPRECHEN</small></button>
+      </div>
+      <div class="core-caption" aria-hidden="true">DEINE STIMME. DEIN ASSISTENT.</div>
+      <div class="voice-controls">
+        <button id="conversationToggle" type="button" aria-pressed="false">Gespräch starten</button>
+        <button id="stopSpeechBtn" type="button">Pause & Stimme stoppen</button>
+      </div>
+      <div id="conversationStatus" class="conversation-status" role="status" aria-live="polite">Tippe auf den Kern, um mit Iron zu sprechen.</div>
+      <p class="conversation-help">Im Gespräch hört Iron nach der Antwort wieder zu. Im Hintergrund pausiert das Mikrofon. Spracherkennung und Stimme hängen vom Browser ab.</p>
+    </section>
+
+    <section class="channel-panel" aria-label="Gespräch mit Iron">
+      <header class="channel-heading"><span class="channel-symbol" aria-hidden="true">⌁</span><div><h2>Ich bin ganz Ohr.</h2><p>02 / DEIN DIREKTER KANAL ZU IRON</p></div></header>
+      <div class="command"><span aria-hidden="true">&gt;</span><input id="commandInput" aria-label="Nachricht an Iron" placeholder="Was möchtest du erledigen?" autocomplete="off" enterkeyhint="send"><button id="sendBtn" type="button">SENDEN</button></div>
+      <div id="response" data-initial="true" role="status">Verbinde deinen Server, um loszulegen.</div>
+      <section class="answer-panel" aria-label="Irons aktuelle Antwort">
+        <div class="answer-head"><span>IRON / ANTWORT</span><b id="speechStatus">BEREIT</b></div>
+        <div id="answerText">Ein Plan für heute, eine neue Idee oder Nachrichten aus der Welt – sag mir, was du brauchst.</div>
+      </section>
+      <div class="starter-prompts" aria-label="Gespräch beginnen">
+        <button type="button" data-command="Erstelle einen Tagesplan">Meinen Tag planen</button>
+        <button type="button" data-command="Zeige meine Aufgaben">Meine Aufgaben</button>
+        <button type="button" data-command="Was gibt es Neues?">Nachrichten ansehen</button>
+      </div>
+      <details class="conversation-panel" open>
+        <summary>GESPRÄCHSVERLAUF</summary>
+        <p id="conversationEmpty">Hier bleibt unser Gespräch auf dieser geöffneten Seite sichtbar.</p>
+        <ol id="conversationLog" class="conversation-log" aria-label="Gesprächsverlauf" aria-live="polite" aria-relevant="additions"></ol>
+      </details>
+    </section>
   </div>
-</section>
 
-<section>
-  <div class="title">SCHNELLAKTIONEN <i></i></div>
-  <div class="quick">
-    <button data-command="Erstelle einen neuen Plan">+ PLAN</button>
-    <button id="uploadBtn">↑ BILD</button>
-    <button data-command="Zeige meinen Status">SYSTEM</button>
+  <section class="deck-modules" aria-labelledby="modulesTitle">
+    <div class="deck-section-title"><h2 id="modulesTitle">DEIN KOMMANDOZENTRUM</h2><span>03 / MODULE</span></div>
+    <div class="module-grid">
+      <a class="module-link" href="task.html"><span class="module-icon" aria-hidden="true">✓</span><span><strong>Aufgaben</strong><small>Den Kopf freibekommen</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link" href="plans.html"><span class="module-icon" aria-hidden="true">◫</span><span><strong>Pläne</strong><small>Aus Zielen Schritte machen</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link" href="kalender.html"><span class="module-icon" aria-hidden="true">◷</span><span><strong>Kalender & Sport</strong><small>Zeit für das Wichtige</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link news-module" href="world.html"><span class="module-icon" aria-hidden="true">◎</span><span><strong>Welt & Nachrichten</strong><small>Quellen im Blick behalten</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link" href="ideen.html"><span class="module-icon" aria-hidden="true">✧</span><span><strong>Ideen</strong><small>Keinen Gedanken verlieren</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link" href="einkaufsliste.html"><span class="module-icon" aria-hidden="true">□</span><span><strong>Einkauf</strong><small>Alles auf einer Liste</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link" href="gedaechtnis.html"><span class="module-icon" aria-hidden="true">◇</span><span><strong>Gedächtnis</strong><small>Was Iron sich merkt</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+      <a class="module-link" href="hud.html"><span class="module-icon" aria-hidden="true">⌘</span><span><strong>System-HUD</strong><small>Deine Übersicht öffnen</small></span><span class="module-arrow" aria-hidden="true">↗</span></a>
+    </div>
+  </section>
+
+  <div class="home-bottom">
+    <section class="system" aria-label="Verbindungsstatus">
+      <header>VERBINDUNGEN / SYSTEMSTATUS</header>
+      <div><p>SERVER<b id="cloudStatusFooter">WIRD GEPRÜFT</b></p><p>STIMME<b id="voiceStatus">BEREIT</b></p><p>PC OPTIONAL<b id="pcStatus" class="offline">OFFLINE</b></p></div>
+    </section>
+    <section class="quick" aria-label="Weitere Aktionen">
+      <button type="button" id="uploadBtn">↑ DOKUMENT<span>Mit Iron analysieren</span></button>
+      <button type="button" onclick="location.href='photos.html'">▣ FOTOS<span>Deine Browser-Bibliothek</span></button>
+      <button type="button" onclick="location.href='sms.html'">✉ NACHRICHT<span>SMS vorbereiten</span></button>
+    </section>
   </div>
   <input id="imageInput" type="file" accept="image/*" hidden>
-</section>
-
-<section class="system">
-  <header>VERBINDUNGEN</header>
-  <div><p>PC<b id="cloudStatusFooter">CONNECTING</b></p><p>STIMME<b id="voiceStatus">STANDBY</b></p><p>PC AGENT<b id="pcStatus" class="offline">OFFLINE</b></p></div>
-</section>
+  <footer class="home-footnote"><span>IRON / PERSÖNLICHER ASSISTENT<br>Du bestimmst den nächsten Schritt.</span><a href="datenverbindung.html">VERBINDUNG EINRICHTEN ↗</a></footer>
 </main>
-
-<section class="iron-window" id="plansWindow"><div class="window-inner"><div class="window-top"><h2>PLANS // IRON</h2><button id="closePlans">×</button></div><div id="plansList"></div></div></section>
-<section class="iron-window" id="tasksWindow"><div class="window-inner"><div class="window-top"><h2>TASKS // IRON</h2><button id="closeTasks">×</button></div><div id="tasksList"></div></div></section>
-
-
-
-<script src="iron-local-data.js?v=2426"></script>
-<script src="app.js?v=2426"></script>
-<script src="web-bridge.js?v=2426"></script>
-<script src="iron-menu.js?v=2426"></script>
-<script src="iron-web-live.js?v=2426"></script></body>
-</html>
+<section class="iron-window" id="plansWindow"><div class="window-inner"><div class="window-top"><h2>PLÄNE / IRON</h2><button id="closePlans" aria-label="Pläne schließen">×</button></div><div id="plansList"></div></div></section>
+<section class="iron-window" id="tasksWindow"><div class="window-inner"><div class="window-top"><h2>AUFGABEN / IRON</h2><button id="closeTasks" aria-label="Aufgaben schließen">×</button></div><div id="tasksList"></div></div></section>
+<script src="iron-local-data.js?v=2600"></script>
+<script src="app.js?v=2600"></script>
+<script src="web-bridge.js?v=2600"></script>
+<script src="iron-menu.js?v=2600"></script>
+<script src="iron-web-live.js?v=2600"></script>
+<script src="iron-conversation.js?v=2600"></script>
+</body></html>

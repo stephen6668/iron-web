@@ -1,0 +1,41 @@
+/* Foreground voice controls and mobile reading comfort. */
+.hero > p { max-width: 37rem; margin-inline: auto; line-height: 1.65; }
+.voice { touch-action: manipulation; }
+.voice:disabled { opacity: .65; cursor: wait; }
+.voice-controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin: 20px auto 10px; }
+.voice-controls button { min-height: 46px; padding: 10px 16px; border: 1px solid #318da7; border-radius: 10px; background: #102733; color: #c7f7ff; font: 600 13px system-ui, sans-serif; cursor: pointer; }
+.voice-controls button[aria-pressed="true"] { color: #031116; background: #74e7f4; border-color: #a4f5ff; }
+.voice-controls button:disabled { opacity: .5; }
+.voice-controls button:focus-visible, #voiceBtn:focus-visible { outline: 3px solid #a4f5ff; outline-offset: 5px; }
+.conversation-status { min-height: 3em; max-width: 40rem; margin: 12px auto 8px; color: #b8dbe5; font: 14px/1.6 system-ui, sans-serif; }
+.conversation-status[data-state="error"] { color: #ffc1bc; }
+.conversation-status[data-state="listening"] { color: #8ef3f9; }
+.conversation-help { max-width: 38rem; color: #83a8b5; font: 12px/1.6 system-ui, sans-serif; margin: 0 auto 24px; }
+.conversation-panel { max-width: 900px; margin: 22px auto 0; padding: 18px; border: 1px solid #204b5a; border-radius: 14px; background: #08151ee8; text-align: left; }
+.conversation-panel summary { cursor: pointer; min-height: 30px; padding: 4px; color: #bff5ff; font: 600 13px/1.6 system-ui, sans-serif; letter-spacing: .06em; }
+.conversation-panel > p { color: #83a8b5; font: 13px/1.6 system-ui, sans-serif; }
+.conversation-log { display: grid; gap: 12px; max-height: 410px; margin: 12px 0 0; padding: 0; overflow: auto; overscroll-behavior: contain; list-style: none; }
+.conversation-entry { padding: 13px 15px; border: 1px solid #1a3e4b; border-radius: 10px; background: #0b202b; }
+.conversation-entry b { color: #8beafa; font: 600 12px/1.6 system-ui, sans-serif; }
+.conversation-entry p { margin: 6px 0 0; color: #d6eaf0; font: 14px/1.7 system-ui, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
+.conversation-user { margin-left: min(12%, 70px); background: #102630; }
+.conversation-error { border-color: #79514b; }
+.conversation-error b { color: #ffc1bc; }
+@media (max-width: 600px) {
+  .topbar { padding-right: 65px; }
+  .topbar .status { font-size: 10px; letter-spacing: .03em; }
+  .hero { padding-top: 28px; }
+  .hero h1 { font-size: clamp(30px, 8.5vw, 48px); }
+  .hero > p { font-size: 14px; }
+  .command input { min-width: 0; font-size: 16px; }
+  .command button, .quick button, .cards button { min-height: 46px; }
+  .answer-panel { margin-top: 18px; }
+  #answerText { font-size: 15px; line-height: 1.75; overflow-wrap: anywhere; }
+  .conversation-panel { padding: 12px; }
+  .conversation-log { max-height: 46vh; }
+  .conversation-entry { padding: 11px 12px; }
+  .conversation-status { padding-inline: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .voice, .voice em, .voice::before, .voice::after { animation: none !important; transition: none !important; }
+}

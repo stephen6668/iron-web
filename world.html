@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>IRON · Welt · Android</title>
-<link rel="stylesheet" href="style.css?v=2426">
+<title>IRON · Welt & Nachrichten</title>
+<link rel="stylesheet" href="style.css?v=2600">
 <script src="https://unpkg.com/globe.gl"></script>
 <style>
 :root{--cyan:#85dafa;--soft:#457e9f;--bg:#061625;--panel:rgba(6,24,41,.94)}
@@ -32,15 +32,15 @@ body > footer{position:fixed;z-index:3;left:24px;bottom:22px;color:#8eb7c9;font-
  .toolbar{left:12px;right:auto;width:min(260px,43vw);top:60px}.nav{grid-template-columns:repeat(4,1fr)}
  .panel{right:12px;left:auto;top:60px;bottom:10px;width:min(270px,43vw);height:auto;min-height:0}
 }
-</style><link rel="stylesheet" href="iron-web-polish.css?v=2426"></head><body>
+</style><link rel="stylesheet" href="iron-web-polish.css?v=2600"><link rel="stylesheet" href="iron-jarvis.css?v=2600"></head><body class="world-body">
 <div id="globe"></div>
 <header><div><div class="brand">IR<span>O</span>N</div><div class="label">WORLD · LIVE NEWS</div></div><div class="label" id="modeLabel">3D WELT</div></header>
-<div class="toolbar"><label for="countryInput">Land auswählen</label><div class="search"><input id="countryInput" list="countryList" placeholder="z. B. Luxemburg" autocomplete="off" aria-label="Land suchen"><datalist id="countryList"></datalist><button onclick="selectTyped()">Zeigen</button></div>
+<div class="toolbar"><label for="countryInput">Land oder Weltregion auswählen</label><div class="search"><input id="countryInput" list="countryList" placeholder="z. B. Luxemburg" autocomplete="off" aria-label="Land suchen"><datalist id="countryList"></datalist><button onclick="selectTyped()">Zeigen</button></div>
 <div class="nav" aria-label="Weltsteuerung"><button onclick="navigate('left')" title="Nach links">←</button><button onclick="navigate('up')" title="Nach oben">↑</button><button onclick="navigate('down')" title="Nach unten">↓</button><button onclick="navigate('right')" title="Nach rechts">→</button><button onclick="navigate('out')" title="Herauszoomen">−</button><button onclick="navigate('in')" title="Hineinzoomen">＋</button><button onclick="navigate('reset')" title="Zurücksetzen">⟲</button></div>
 <button id="voiceBtn" style="width:100%;margin-top:10px">🎙 Land sprechen</button><p class="help">Ziehen: drehen · Mausrad: zoomen · Rechtsklick ziehen: verschieben · Land anklicken: Nachrichten. Pfeiltasten und +/− funktionieren ebenfalls.</p></div>
-<aside class="panel"><h1 id="selected">DIE WELT</h1><div class="status" id="status">Weltkarte wird geladen…</div><div class="actions" id="actions" hidden><button onclick="readAloud()">▶ Vorlesen</button></div><div id="voiceSummary" class="summary" aria-live="polite"></div><div id="articles"></div></aside>
-<footer>30 FPS · 70 % Auflösung · Ländernews nur auf Auswahl</footer>
-<script src="iron-local-data.js?v=2426"></script><script>window.IRON_STATIC_WEB=true;window.IRON_MOBILE=true;</script>
+<aside class="panel"><h1 id="selected">DIE WELT</h1><div class="status" id="status">Weltkarte wird geladen…</div><div class="actions" id="actions" hidden><button onclick="readAloud()">▶ Vorlesen</button></div><button id="refreshNews" type="button" onclick="loadNews(selectedCountry||'World')">↻ Aktualisieren</button><details><summary>Quellen & Abrufstatus</summary><div id="newsSources"></div></details><div id="voiceSummary" class="summary" aria-live="polite"></div><div id="articles"></div></aside>
+<footer>Direkte Quellen · Veröffentlichungszeit je Meldung · Abdeckung je Land unterschiedlich</footer>
+<script src="iron-local-data.js?v=2600"></script><script>window.IRON_STATIC_WEB=true;window.IRON_MOBILE=true;</script>
 <script>
 const statusEl=document.getElementById('status'),articlesEl=document.getElementById('articles'),selectedEl=document.getElementById('selected'),input=document.getElementById('countryInput'),actions=document.getElementById('actions'),summaryEl=document.getElementById('voiceSummary');
 let features=[],selectedFeature=null,selectedCountry='',latestArticles=[],controlSeq=-1,loadId=0;
@@ -77,32 +77,48 @@ function renderMode(){
 }
 function navigate(op){if(!globe)return;let p=globe.pointOfView();globe.controls().autoRotate=false;if(op==='reset'){resetView();return}if(op==='in'||op==='out'){p.altitude=Math.max(.13,Math.min(3.6,p.altitude*(op==='in'?.73:1.37)))}else{if(op==='left')p.lng-=16;if(op==='right')p.lng+=16;if(op==='up')p.lat=Math.min(87,p.lat+12);if(op==='down')p.lat=Math.max(-87,p.lat-12)}globe.pointOfView(p,500)}
 async function notifySelection(){if(window.IRON_MOBILE)return;try{await fetch('/api/world/selected',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({country:selectedCountry,articles:latestArticles})})}catch(e){}}
-async function loadNews(name,notify=true){const thisLoad=++loadId;selectedCountry=name;selectedEl.textContent=name==='World'?'DIE WELT':name.toLocaleUpperCase();statusEl.textContent='Aktuelle Meldungen werden geprüft…';articlesEl.replaceChildren();actions.hidden=true;summaryEl.textContent='';latestArticles=[];if(!window.IRON_MOBILE){await notifySelection();if(thisLoad!==loadId)return}try{let data=await window.IRONLocalData.news(name);if(thisLoad!==loadId)return;if(!data.ok)throw Error(data.error||'Nachrichten nicht verfügbar');latestArticles=data.articles||[];statusEl.textContent=latestArticles.length?`${latestArticles.length} geprüfte Meldungen · ${name}`:`Für ${name} sind derzeit keine aktuellen Meldungen aus freigegebenen Quellen verfügbar.`;articlesEl.innerHTML=latestArticles.map(a=>`<div class="article"><a href="${escapeHtml(a.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a><small>${escapeHtml(a.source)} · ${escapeHtml(a.published?new Date(a.published).toLocaleString('de-DE'):'')}</small></div>`).join('');actions.hidden=!latestArticles.length;if(notify)await notifySelection()}catch(e){if(thisLoad===loadId)statusEl.textContent='Abruf fehlgeschlagen: '+e.message}}
-function focusFeature(f){if(!globe||!f)return;selectedFeature=f;renderMode();let c=centroid(f);globe.controls().autoRotate=false;globe.pointOfView({...c,altitude:.95},900);input.value=germanName(f);loadNews(nameOf(f))}
+function safeArticleURL(value){try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password?u.href:'';}catch{return '';}}
+async function loadNews(name,notify=true){
+ const thisLoad=++loadId;selectedCountry=name;selectedEl.textContent=name==='World'?'DIE WELT':name.toLocaleUpperCase();
+ statusEl.textContent='Aktuelle Meldungen werden abgerufen …';articlesEl.replaceChildren();actions.hidden=true;summaryEl.textContent='';latestArticles=[];document.getElementById('newsSources').replaceChildren();
+ try{
+  const data=await window.IRONLocalData.news(name);if(thisLoad!==loadId)return;if(!data.ok)throw Error(data.error||'Nachrichten nicht verfügbar');
+  latestArticles=(data.articles||[]).filter(a=>safeArticleURL(a.url));
+  const stamp=data.fetched_at?' · Abruf: '+new Date(data.fetched_at).toLocaleString('de-DE'):'';
+  statusEl.textContent=latestArticles.length?`${latestArticles.length} Meldungen · ${name}${stamp}`:`Für ${name} sind derzeit keine aktuellen Meldungen aus den eingerichteten Quellen verfügbar.${stamp}`;
+  if(data.coverage?.message)statusEl.textContent+=' · '+data.coverage.message;
+  if(data.coverage?.note)statusEl.textContent+=' · '+data.coverage.note;
+  if(typeof data.coverage==='string')statusEl.textContent+=' · '+data.coverage;
+  if(data.stale)statusEl.textContent+=' · Veralteter Stand';
+  articlesEl.innerHTML=latestArticles.map(a=>`<div class="article"><a href="${escapeHtml(safeArticleURL(a.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.title)}</a><small>${escapeHtml(a.source)} · ${escapeHtml(a.published?new Date(a.published).toLocaleString('de-DE'):'Zeit unbekannt')}</small></div>`).join('');
+  const sourceBox=document.getElementById('newsSources');
+  for(const source of data.sources||[]){const p=document.createElement('p');p.textContent=(source.name||source.source||'Quelle')+' · '+(source.status||'')+(source.error?' · '+source.error:'');sourceBox.append(p);}
+  actions.hidden=!latestArticles.length;if(notify)await notifySelection();
+ }catch(e){if(thisLoad===loadId)statusEl.textContent='Abruf fehlgeschlagen: '+e.message;}
+}
+function focusFeature(f){if(!f)return;selectedFeature=f;renderMode();let c=centroid(f);if(globe){globe.controls().autoRotate=false;globe.pointOfView({...c,altitude:.95},900);}input.value=germanName(f);loadNews(nameOf(f))}
 function focusCountry(s){s=String(s||'').trim();if(!s){statusEl.textContent='Bitte zuerst ein Land eingeben.';return}if(norm(s)==='world'||norm(s)==='welt'){resetView();return}let f=findFeature(s);if(f){focusFeature(f);return}const name=aliases[s.toLocaleLowerCase()]||s;selectedFeature=null;input.value=s;renderMode();loadNews(name)}
 function selectTyped(){focusCountry(input.value.trim())}
-function resetView(){if(!globe)return;++loadId;selectedFeature=null;selectedCountry='';latestArticles=[];input.value='';selectedEl.textContent='DIE WELT';statusEl.textContent='Wähle ein Land, um dessen aktuelle Nachrichten zu laden.';articlesEl.replaceChildren();actions.hidden=true;summaryEl.textContent='';notifySelection();renderMode();globe.pointOfView({lat:17,lng:0,altitude:2.25},800)}
+function resetView(){selectedFeature=null;input.value='';renderMode();if(globe)globe.pointOfView({lat:17,lng:0,altitude:2.25},800);return loadNews('World');}
 async function readAloud(){
   if(!selectedCountry){summaryEl.textContent='Wähle zuerst ein Land aus.';return}
   if(!latestArticles.length){summaryEl.textContent='Für dieses Land sind keine geladenen Meldungen vorhanden.';return}
   const requestedCountry=selectedCountry,requestId=loadId;
-  summaryEl.textContent='IRON fasst alle geladenen Meldungen zusammen…';
+  summaryEl.textContent='IRON bereitet die Schlagzeilen zum Vorlesen vor …';
   try{
     const mobile=Boolean(window.IRON_MOBILE);
-    const url=mobile?'https://starter-function-4j4o.fra.appwrite.run/api/world-news/summary':'/api/world/speak';
     const data=await window.IRONLocalData.action('news',{country:selectedCountry});
-    const response={ok:true};
     if(requestId!==loadId||requestedCountry!==selectedCountry)return;
-    if(!response.ok||!data.ok)throw Error(data.error||'Zusammenfassung nicht verfügbar');
+    if(!data.ok)throw Error(data.error||'Zusammenfassung nicht verfügbar');
     if(data.country&&data.country!==selectedCountry)throw Error('Die Länderauswahl hat sich geändert.');
     summaryEl.textContent=data.summary||'Keine Zusammenfassung verfügbar.';
     if(mobile&&data.summary)await window.IRONMobile?.speak?.(data.summary);
-  }catch(e){summaryEl.textContent='Zusammenfassung fehlgeschlagen: '+e.message}
+  }catch(e){if(requestId===loadId&&requestedCountry===selectedCountry)summaryEl.textContent='Vorlesen fehlgeschlagen: '+e.message}
 }
 async function pollControl(){try{let d=await(await fetch('/api/world/control')).json();if(d.ok&&Number(d.seq)!==controlSeq){controlSeq=Number(d.seq);if(d.nav)navigate(d.nav);else if(d.country)focusCountry(d.country);else if(d.overview)resetView()}}catch(e){}}
 if(!window.IRON_MOBILE)setInterval(pollControl,1800);
 input.addEventListener('keydown',e=>{if(e.key==='Enter')selectTyped()});document.addEventListener('keydown',e=>{if(e.target===input)return;let keys={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down','+':'in','=':'in','-':'out'};if(keys[e.key]){e.preventDefault();navigate(keys[e.key])}});
-async function loadCountries(){if(!globe){statusEl.textContent='3D-Karte derzeit nicht verfügbar. Du kannst oben ein Land eingeben und Nachrichten abrufen.';const q=new URLSearchParams(location.search).get('country');if(q)focusCountry(q);return}const urls=['https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson','https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson'];for(let url of urls){try{let r=await fetch(url);if(!r.ok)throw Error('HTTP '+r.status);let data=await r.json();if(!Array.isArray(data.features)||data.features.length<150)throw Error('Ungültige Länderdaten');features=data.features;break}catch(e){}}if(!features.length){statusEl.textContent='Ländergrenzen derzeit nicht verfügbar. Du kannst oben ein Land eingeben und Nachrichten abrufen.';const q=new URLSearchParams(location.search).get('country');if(q)focusCountry(q);return}globe.polygonsData(features).polygonsTransitionDuration(0).polygonCapCurvatureResolution(12).polygonAltitude(0).polygonLabel(f=>`<b>${escapeHtml(germanName(f))}</b><br>Nachrichten öffnen`).onPolygonClick(f=>focusFeature(f));renderMode();let list=document.getElementById('countryList');list.innerHTML=features.flatMap(f=>[germanName(f),nameOf(f)]).filter((n,i,a)=>a.indexOf(n)===i).sort((a,b)=>a.localeCompare(b,'de')).map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');let q=new URLSearchParams(location.search).get('country');if(q)focusCountry(q);else resetView();if(!window.IRON_MOBILE)pollControl()}
+async function loadCountries(){if(!globe){statusEl.textContent='3D-Karte derzeit nicht verfügbar. Du kannst oben ein Land eingeben und Nachrichten abrufen.';const q=new URLSearchParams(location.search).get('country');if(q)focusCountry(q);else loadNews('World');return}const urls=['https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_50m_admin_0_countries.geojson','https://cdn.jsdelivr.net/gh/nvkelso/natural-earth-vector@master/geojson/ne_50m_admin_0_countries.geojson'];for(let url of urls){try{let r=await fetch(url);if(!r.ok)throw Error('HTTP '+r.status);let data=await r.json();if(!Array.isArray(data.features)||data.features.length<150)throw Error('Ungültige Länderdaten');features=data.features;break}catch(e){}}if(!features.length){statusEl.textContent='Ländergrenzen derzeit nicht verfügbar. Du kannst oben ein Land eingeben und Nachrichten abrufen.';const q=new URLSearchParams(location.search).get('country');if(q)focusCountry(q);else loadNews('World');return}globe.polygonsData(features).polygonsTransitionDuration(0).polygonCapCurvatureResolution(12).polygonAltitude(0).polygonLabel(f=>`<b>${escapeHtml(germanName(f))}</b><br>Nachrichten öffnen`).onPolygonClick(f=>focusFeature(f));renderMode();let list=document.getElementById('countryList');list.innerHTML=features.flatMap(f=>[germanName(f),nameOf(f)]).filter((n,i,a)=>a.indexOf(n)===i).sort((a,b)=>a.localeCompare(b,'de')).map(n=>`<option value="${escapeHtml(n)}"></option>`).join('');let q=new URLSearchParams(location.search).get('country');if(q)focusCountry(q);else resetView();if(!window.IRON_MOBILE)pollControl()}
 loadCountries();window.addEventListener('resize',()=>{if(globe)globe.width(innerWidth).height(innerHeight)});
 </script>
 <script>
@@ -121,6 +137,6 @@ window.command=async function(spoken){
  statusEl.textContent='Bitte ein Land nennen, zum Beispiel „Nachrichten aus Luxemburg“.';
 };
 </script>
-<script src="web-bridge.js?v=2426"></script>
-<script src="iron-menu.js?v=2426"></script>
-<script src="iron-web-live.js?v=2426"></script></body></html>
+<script src="web-bridge.js?v=2600"></script>
+<script src="iron-menu.js?v=2600"></script>
+<script src="iron-web-live.js?v=2600"></script></body></html>
