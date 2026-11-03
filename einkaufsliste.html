@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#05080d">
 <title>IRON // Einkaufsliste</title>
-<link rel="stylesheet" href="style.css?v=2426">
-<link rel="stylesheet" href="iron-web-polish.css?v=2426"></head>
+<link rel="stylesheet" href="style.css?v=2600">
+<link rel="stylesheet" href="iron-web-polish.css?v=2600"><link rel="stylesheet" href="iron-jarvis.css?v=2600"></head>
 <body>
 <div class="grid"></div><div class="scanlines"></div>
 <header class="topbar">
   <a class="brand" href="index.html"><span class="mark">I</span><div><b>IRON</b><small>PERSONAL SYSTEM</small></div></a>
-  <div class="status"><i></i> PC <b id="cloudStatus">CONNECTING</b></div>
+  <div class="status"><i></i> SERVER <b id="cloudStatus">CONNECTING</b></div>
 </header>
 
 <main class="page-main">
@@ -35,6 +35,7 @@
   </section>
 </section>
 
+<section class="panel-section"><details><summary>+ Einkaufsliste selbst eintragen</summary><form id="manualDataForm" class="manual-form" data-table="plans" data-kind="shopping"><label for="manualTitle">Titel</label><input id="manualTitle" required maxlength="200"><label for="manualContent">Inhalt</label><textarea id="manualContent" rows="5" required maxlength="30000"></textarea><button>SPEICHERN</button><p id="manualNotice" role="status"></p></form></details></section>
 <section class="panel-section">
   <div class="title">EINKAUFSLISTEN <i></i></div>
   <div id="shoppingList" class="screen-list"><p class="muted">Lade Einkaufsliste...</p></div>
@@ -43,9 +44,9 @@
 
 
 
-<script src="iron-local-data.js?v=2426"></script>
-<script src="app.js?v=2426"></script>
-<script src="web-bridge.js?v=2426"></script>
-<script src="iron-menu.js?v=2426"></script>
-<script src="iron-web-live.js?v=2426"></script></body>
+<script src="iron-local-data.js?v=2600"></script>
+<script src="app.js?v=2600"></script>
+<script src="web-bridge.js?v=2600"></script>
+<script src="iron-menu.js?v=2600"></script>
+<script src="iron-web-live.js?v=2600"></script><script src="manual-data.js?v=2600"></script></body>
 </html>

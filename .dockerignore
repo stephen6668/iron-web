@@ -1,0 +1,11 @@
+.git
+.agents
+.codex
+node_modules
+data
+.env
+.env.*
+*.log
+tests
+README*
+scratch

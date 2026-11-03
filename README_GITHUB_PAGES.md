@@ -1,3 +1,23 @@
+# IRON Web – GitHub Pages und PC-Verbindung
+
+Die aktuelle Version ergänzt einen unabhängigen Cloud-Server. Die Einrichtung und der tatsächliche Funktionsumfang stehen in [README_CLOUD.md](README_CLOUD.md). Hosting und KI-Schlüssel sind noch nicht eingerichtet; diese Änderung allein aktiviert keinen Live-Cloud-Betrieb.
+
+## GitHub Pages weiterhin verwenden
+
+Die vorhandenen HTML-, JavaScript- und CSS-Dateien können weiter über GitHub Pages bereitgestellt werden. GitHub Pages liefert nur die Oberfläche aus und führt den Node-Server im Ordner `server/` nicht aus. Persönliche Daten und Schlüssel dürfen nicht in dieses öffentliche Repository.
+
+Für den Cloud-Betrieb wird der Server separat mit HTTPS und dauerhaftem Speicher gehostet. Unter **Verbindung → Cloud – ohne PC** seine Adresse und den persönlichen Verbindungsschlüssel eintragen. Auf dem Server muss `IRON_ALLOWED_ORIGINS` den Ursprung der Pages-Seite erlauben: `https://stephen6668.github.io` ohne Repository-Pfad.
+
+Die aktualisierte Oberfläche veröffentlicht sich nicht allein durch einen Pull Request. Nach Übernahme der Änderungen den bestehenden GitHub-Pages-Workflow beziehungsweise die bisherige Branch-Veröffentlichung prüfen. Bei alten Dateien die Seite vollständig neu laden.
+
+## Bestehenden PC weiterverwenden
+
+Unter **Verbindung → Bisheriger privater PC** bleiben die private HTTPS-Adresse und der vorhandene Verbindungsschlüssel nutzbar. Bereits gespeicherte PC-Kopplungen werden berücksichtigt. IRON und Tailscale müssen im PC-Modus weiterhin laufen. Der Cloud-Modus importiert oder löscht keine PC-Daten.
+
+Die folgende Anleitung dokumentiert den bisherigen Stand V24.26. Ihre Aussagen über PC-Pflicht und lokale Daten gelten für **diese PC-Betriebsart**, nicht für den neuen Cloud-Modus. Frühere Testzahlen und Funktionsbeschreibungen sind historisch; sie belegen keine neue Geräte- oder Hostingprüfung.
+
+---
+
 # IRON Web V24.26 – mit deinem aktuellen PC verbunden
 
 Die gesamte bestehende GitHub-Webseite bleibt enthalten. Neue Bildschirme:

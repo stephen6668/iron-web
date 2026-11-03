@@ -43,6 +43,24 @@
    }catch{$('#smsPcStatus').textContent='PC: Status derzeit nicht verfügbar. Web-SMS benötigt den verbundenen PC.';}
   }catch(e){if(pendingId)status('Status gerade nicht verfügbar: '+String(e.message||e));}
  }
+ if(window.IRONConnectionMode==='cloud'){
+  // Opening the phone composer is a draft handoff, never a delivery receipt.
+  $('#smsQueue').textContent='IN SMS-APP ÖFFNEN';
+  status('Bereit. Nachricht vorbereiten und in der SMS-App deines Handys öffnen.');
+  document.querySelector('label[for="smsSlot"]')?.remove();$('#smsSlot').hidden=true;
+  $('#smsPcStatus').textContent='Versand über die SMS-App deines Handys. Kein PC nötig.';
+  const explanation=document.querySelector('.page-heading p');if(explanation)explanation.textContent='Entwirf deine Nachricht mit IRON und übergib sie an die SMS-App deines Handys.';
+  document.querySelector('.sms-card h2').textContent='SMS auf deinem Handy vorbereiten';
+  document.querySelector('.sms-card small').textContent='IRON öffnet die SMS-App mit Empfänger und Text. Du prüfst und sendest die Nachricht dort. Versand und Zustellung kann die Webseite nicht prüfen.';
+  $('#smsQueue').onclick=()=>{try{
+    const data=values();
+    const separator=/iPad|iPhone|iPod/.test(navigator.userAgent)?'&':'?';
+    location.href='sms:'+data.number+separator+'body='+encodeURIComponent(data.message);
+    status('Entwurf an die SMS-App übergeben. Dort prüfen und senden. Kein Versand bestätigt.');
+  }catch(e){status(e.message);}};
+  $('#smsRefresh').onclick=()=>status('Prüfe den Versand direkt in deiner SMS-App. IRON hat keinen Zugriff auf den Mobilfunkstatus.');
+  pendingId='';sessionStorage.removeItem('ironSmsPendingId');
+ }else{
  $('#smsQueue').onclick=async()=>{
   try{
    const data=values();
@@ -57,15 +75,16 @@
   finally{$('#smsQueue').disabled=!!pendingId;}
  };
  $('#smsRefresh').onclick=async()=>{await refresh();$('#smsQueue').disabled=!!pendingId;};
+ }
  if(pendingId)$('#smsQueue').disabled=true;
  const Speech=window.SpeechRecognition||window.webkitSpeechRecognition;
  $('#smsVoice').onclick=()=>{
   if(!Speech){status('Browser-Spracherkennung nicht verfügbar. Bitte Text eintippen.');return;}
   const recognition=new Speech();recognition.lang='de-DE';recognition.interimResults=false;
-  recognition.onresult=e=>{$('#smsMessage').value=(e.results?.[0]?.[0]?.transcript||'').slice(0,500);status('Text erkannt. Nummer und Text prüfen und dann „SMS über Android senden“ drücken.');};
+  recognition.onresult=e=>{$('#smsMessage').value=(e.results?.[0]?.[0]?.transcript||'').slice(0,500);status(window.IRONConnectionMode==='cloud'?'Text erkannt. Nummer und Text prüfen und dann „In SMS-App öffnen“ drücken.':'Text erkannt. Nummer und Text prüfen und dann „SMS über Android senden“ drücken.');};
   recognition.onerror=e=>status('Diktat fehlgeschlagen: '+e.error);
   try{recognition.start();status('Ich höre zu…');}catch(e){status('Mikrofon: '+e.message);}
  };
  if(pendingId)pollTimer=setInterval(refresh,4500);
- refresh();
+ if(window.IRONConnectionMode!=='cloud')refresh();
 })();

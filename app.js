@@ -48,7 +48,7 @@ let pcLastSeen = null;
 
 function show(text) {
   const msg = String(text ?? "");
-  if (response) response.textContent = "IRON // " + msg;
+  if (response) {response.textContent = "IRON // " + msg;response.removeAttribute("data-initial");}
   const answer = $("#answerText");
   if (answer) {
     answer.textContent = msg;
@@ -203,7 +203,7 @@ function ensureAuthUI() {
   $("#authPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") $("#authLogin").click(); });
 }
 async function initAuth(){
-  if(!window.IRONLocalDataActive){show("Bitte zuerst unter Datenverbindung deinen PC koppeln.");return false;}
+  if(!window.IRONLocalDataActive){setCloudStatus(false);show("Bitte unter Datenverbindung deinen Cloud-Server oder PC verbinden.");return false;}
   ensureAuthUI();
   try {
     currentUser = await cloud.currentUser();
@@ -218,7 +218,8 @@ async function initAuth(){
   await afterLogin(); return true;
 }
 async function afterLogin(){
-  await checkCloud();
+  const connected=await checkCloud();
+  if(connected&&response?.hasAttribute('data-initial'))show(window.IRONConnectionMode==='cloud'&&!window.IRONHealth?.ai_configured?'Cloud verbunden. Für Gespräche den Gemini- oder Groq-Zugang auf dem Server einrichten.':'Verbunden. Was möchtest du erledigen?');
   await Promise.allSettled([checkPC(), renderTasksScreen(), renderPlansScreen(), renderShoppingScreen(), updateHudMetrics()]);
   if($("#photoGrid")) renderPhotoLibrary().catch(e=>show("Foto-Bibliothek: "+e.message));
 }
@@ -264,6 +265,7 @@ function setPCStatus(ok, lastSeen){
 
 async function checkPC(){
   if(!currentUser) return;
+  if(window.IRONConnectionMode==='cloud'){setPCStatus(false,null);return;}
   try {
     const row = await cloud.get(cloud.cfg.tables.pcStatus, cloud.cfg.pcStatusRowId);
     const seen = row.last_seen ? new Date(row.last_seen).getTime() : 0;
@@ -332,17 +334,9 @@ async function renderPlansScreen(){
     const data=await cloud.list(cloud.cfg.tables.plans);
     rows=Array.isArray(data) ? data : (data?.rows || data?.documents || []);
   }catch(e){
-    console.warn("Appwrite plans read:",e);
+    host.innerHTML=`<p>Pläne konnten nicht geladen werden: ${escapeHtml(e.message)}</p>`;return;
   }
 
-  // Fallback/instant cache: useful directly after save and if a read is delayed.
-  try{
-    const cached=JSON.parse(localStorage.getItem("iron_plans_cache")||"[]");
-    const ids=new Set(rows.map(r=>r.$id).filter(Boolean));
-    for(const r of cached){
-      if(!r.$id || !ids.has(r.$id)) rows.push(r);
-    }
-  }catch{}
 
   rows=rows
     .filter(r=>String(r.typ||"").toLowerCase()!=="einkauf" && !String(r.name||"").startsWith("EINKAUF // "))
@@ -408,20 +402,13 @@ async function renderShoppingScreen(){
   try{
     const data=await cloud.list(cloud.cfg.tables.plans);
     rows=Array.isArray(data) ? data : (data?.rows || data?.documents || []);
-    console.log("IRON shopping rows:", rows);
+
   }catch(e){
-    console.error("Appwrite shopping read:",e);
-    host.innerHTML=`<article class="saved-card"><h3>APPWRITE READ FEHLER</h3><p>${escapeHtml(e?.message || String(e))}</p><small>Prüfe plans → Settings → Permissions → READ für deinen angemeldeten Benutzer/Users.</small></article>`;
+
+    host.innerHTML=`<article class="saved-card"><h3>VERBINDUNG FEHLGESCHLAGEN</h3><p>${escapeHtml(e?.message || String(e))}</p><small>Prüfe deine Datenverbindung.</small></article>`;
     return;
   }
 
-  try{
-    const cached=JSON.parse(localStorage.getItem("iron_plans_cache")||"[]");
-    const ids=new Set(rows.map(r=>r.$id).filter(Boolean));
-    for(const r of cached){
-      if(!r.$id || !ids.has(r.$id)) rows.push(r);
-    }
-  }catch{}
 
   const allRows = rows.slice();
   rows=rows
@@ -429,8 +416,7 @@ async function renderShoppingScreen(){
     .sort((a,b)=>String(b.erstellt||"").localeCompare(String(a.erstellt||"")));
 
   if(!rows.length){
-    const preview=allRows.slice(0,5).map(r=>`name=${escapeHtml(r.name||"")} | typ=${escapeHtml(r.typ||"(leer)")}`).join("<br>");
-    host.innerHTML=`<article class="saved-card"><h3>Keine Einkaufs-Row erkannt</h3><p>Appwrite READ funktioniert. Gelesene Rows: ${allRows.length}</p><small>${preview || "Keine Rows aus plans erhalten."}</small></article>`;
+    host.innerHTML='<article class="saved-card"><h3>Noch keine Einkaufsliste</h3><p>Trage eine Liste selbst ein oder bitte Iron, eine zu erstellen.</p></article>';
     return;
   }
 
@@ -1213,151 +1199,38 @@ async function queuePCCommand(t){
   });
   return row;
 }
+let commandBusy = false;
+function commandEvent(role, text) {
+  window.dispatchEvent(new CustomEvent('iron-command', {detail:{role,text}}));
+}
 async function command(t){
-  t=(t||"").trim();
-  if(!t)return;
-  if(window.IRONLocalDataActive){
-    const country=t.match(/(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+(.+?)\s*[.!?]?$/i);
-    if(/was gibt es neues|weltkarte|globus/i.test(t)||country){location.href='world.html'+(country?'?country='+encodeURIComponent(country[1]):'');return;}
-    const smsDraft=t.match(/^(?:iron[,\s]*)?(?:sende|schicke)\s+(?:eine?\s+)?sms\s+an\s+(\+?[0-9\s()-]{5,24})\s+(?:mit\s+(?:dem\s+)?text|text)\s+(.+)$/i);
-    if(smsDraft){sessionStorage.setItem('ironSmsDraft',JSON.stringify({number:smsDraft[1].replace(/[\s()-]/g,''),message:smsDraft[2].trim()}));location.href='sms.html';return;}
-    if(/^(?:iron[, :]*\s*)?(?:öffne|oeffne|zeige)\b/i.test(t)){
-      const routes=[[/\b(?:tasks?|aufgaben)\b/i,'task.html'],[/\bpläne|plaene|plans\b/i,'plans.html'],[/\bideen?\b/i,'ideen.html'],[/\bsms\b/i,'sms.html'],[/\b(?:kalender|sportplan)\b/i,'kalender.html'],[/\b(?:dokumente?|dateianalyse)\b/i,'dokumente.html'],[/\b(?:mails?|posteingang)\b/i,'mails.html'],[/\b(?:gedächtnis|erinnerungen)\b/i,'gedaechtnis.html'],[/\bbegleitmodus\b/i,'begleiter.html'],[/\bhud\b/i,'hud.html']];
-      const found=routes.find(([pattern])=>pattern.test(t));if(found){location.href=found[1];return;}
-    }
-    show('IRON am PC verarbeitet deinen Auftrag …');
-    try{const answer=await window.IRONLocalData.execute(t);show(answer);const out=document.getElementById('answerText');if(out)out.textContent=answer;window.IRONMobile?.speak?.(answer);await Promise.allSettled([renderTasksScreen(),renderPlansScreen(),renderShoppingScreen()]);}catch(e){show(e.message);}
-    return;
-  }
-  show('Bitte deinen PC unter Datenverbindung koppeln.');return;
-
+  t=String(t||'').trim();
+  if(!t||commandBusy)return;
+  commandEvent('user',t);
+  const speechEpoch=window.IRONConversation?.speechEpoch;
+  const country=t.match(/(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+(.+?)\s*[.!?]?$/i);
+  if(/was gibt es neues|weltkarte|globus/i.test(t)||country){location.href='world.html'+(country?'?country='+encodeURIComponent(country[1]):'?country=World');return;}
   const sms=t.match(/^(?:iron[,\s]*)?(?:sende|schicke)\s+(?:eine?\s+)?sms\s+an\s+(\+?[0-9\s()-]{5,24})\s+(?:mit\s+(?:dem\s+)?text|text)\s+(.+)$/i);
   if(sms){sessionStorage.setItem('ironSmsDraft',JSON.stringify({number:sms[1].replace(/[\s()-]/g,''),message:sms[2].trim()}));location.href='sms.html';return;}
-  if(/^(?:iron[,\s]*)?(?:öffne|oeffne|zeige)\s+(?:die\s+)?sms(?:-seite)?$/i.test(t)){location.href='sms.html';return;}
-  if(/\b(?:öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\bideen?(?:-seite)?\b/i.test(t)){
-    location.href='ideen.html';return;
+  if(/^(?:iron[, :]*\s*)?(?:öffne|oeffne|zeige)\b/i.test(t)){
+    const routes=[[/\b(?:tasks?|aufgaben)\b/i,'task.html'],[/pläne|plaene|plans/i,'plans.html'],[/einkauf/i,'einkaufsliste.html'],[/\bideen?\b/i,'ideen.html'],[/\bsms\b/i,'sms.html'],[/\b(?:kalender|sportplan)\b/i,'kalender.html'],[/\b(?:dokumente?|dateianalyse)\b/i,'dokumente.html'],[/\b(?:mails?|posteingang)\b/i,'mails.html'],[/gedächtnis|erinnerungen/i,'gedaechtnis.html'],[/begleitmodus/i,'begleiter.html'],[/\bhud\b/i,'hud.html']];
+    const found=routes.find(([pattern])=>pattern.test(t));if(found){location.href=found[1];return;}
   }
-  if(/was gibt es neues|was ist neu|welt(?:karte|nachrichten|news)?|globus|3d erde/i.test(t)
-     || /(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+[A-Za-zÀ-ÿ]/i.test(t)){
-    const country=t.match(/(?:nachrichten|news)\s+(?:aus|von|zu|über|ueber)\s+(.+?)\s*[.!?]?$/i);
-    location.href=country?`world.html?country=${encodeURIComponent(country[1].trim())}`:"world.html";return;
+  if(!window.IRONLocalDataActive){
+    const text='Bitte unter Datenverbindung deinen Cloud-Server oder PC verbinden.';
+    show(text);commandEvent('error',text);return;
   }
-  if(!currentUser) return;
-  if(input) input.value="";
-  show("Befehl wird verarbeitet...");
+  commandBusy=true;
+  const send=document.getElementById('sendBtn');if(send)send.disabled=true;
+  show(window.IRONConnectionMode==='cloud'?'IRON Cloud verarbeitet deinen Auftrag …':'IRON am PC verarbeitet deinen Auftrag …');
   try{
-    if(calendarCommandRequested(t)){
-      await createCalendarFromCommand(t);
-      return;
-    }
-    if(mailSummaryRequested(t)){
-      await summarizeImportantMails();
-      return;
-    }
-    // Pure navigation/read requests must never call an API route.
-    if(/\b(öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\b(einkaufsliste|einkaufs\s*liste|einkauf)\b/i.test(t)){
-      location.href="einkaufsliste.html"; return;
-    }
-    if(/\b(öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\b(pläne|plaene|planseite|meine pläne|meine plaene)\b/i.test(t)){
-      location.href="plans.html"; return;
-    }
-    if(/\b(öffne|oeffne|zeig|zeige|anzeigen|geh|gehe)\b.*\b(fotos|bilder|fotobibliothek|bildbibliothek)\b/i.test(t)){
-      location.href="photos.html"; return;
-    }
-    const requestedImage=extractImageRequest(t);
-    if(requestedImage){
-      await showAppwriteImage(requestedImage);
-      return;
-    }
-    if(smartPlanAndShoppingRequested(t)){
-      await saveSmartPlanAndShopping(t);
-      renderPlansScreen();
-      return;
-    }
-    if(/\b(nachrichten|news|schlagzeilen)\b/i.test(t) && !/(plan|einkauf)/i.test(t)){
-      await loadNews(); return;
-    }
-    if(/\b(aktien|aktienkurse|börse|boerse|kurse)\b/i.test(t) && !/(plan|einkauf)/i.test(t)){
-      await loadStocks(); return;
-    }
-    if(/\b(wetter|temperatur)\b/i.test(t) && !/(plan|einkauf)/i.test(t)){
-      const cityMatch=t.match(/(?:in|für|fuer)\s+([A-Za-zÀ-ÿ .'-]{2,60})/i);
-      await loadWeatherV2(cityMatch?.[1]?.trim() || "Luxembourg"); return;
-    }
-    if(/(öffne|oeffne|zeige).{0,20}(einkaufsliste|einkaufs\s*liste)/i.test(t)){
-      location.href="einkaufsliste.html"; return;
-    }
-    if(shoppingRequested(t)){
-      const title=shoppingTitleFromCommand(t);
-      show("IRON erstellt die Einkaufsliste...");
-      const list=await buildShoppingList(t);
-      await createShoppingList(title,list);
-      const a=`Einkaufsliste gespeichert: ${title}`;
-      show(a); speak(a); renderShoppingScreen(); return;
-    }
-    if(taskRequested(t)){
-      const txt=cleanTaskText(t);
-      await createTask(txt,"Offen");
-      const a=`Task gespeichert: ${txt}`; show(a); speak(a); renderTasksScreen(); return;
-    }
-    if(planRequested(t)){
-      const raw = t.replace(/^iron[, ]*/i,"").trim();
-      const sport = /(sport|fitness|training|trainingsplan)/i.test(raw);
-      const numberMatch = raw.match(/\b([1-7])\b/);
-      const days = numberMatch ? Number(numberMatch[1]) : null;
-
-      let name = sport
-        ? (days ? `Sportplan – ${days} Tage` : "Sportplan")
-        : raw.replace(/^(erstelle|erstell|mach|mache)\s+(mir\s+)?(einen?\s+)?/i,"").slice(0,180);
-
-      if(!name) name = "IRON Plan";
-
-      const prompt = sport
-        ? `Erstelle einen vollständigen, sicheren und ausgewogenen Sportplan${days ? ` für ${days} Trainingstage pro Woche` : ""}.
-Der Nutzerbefehl lautet: "${raw}".
-Der Plan soll für allgemeine Fitness und Gesundheit geeignet sein, mit Aufwärmen, Hauptteil, Pausen/Erholung und kurzem Cool-down.
-Keine extremen Belastungen, kein Übertraining und keine restriktiven Ernährungsregeln.
-Schreibe den Plan übersichtlich auf Deutsch mit Tagen/Einheiten, Übungen bzw. Aktivitäten, Sätzen/Wiederholungen oder Zeitangaben und Erholungshinweisen.`
-        : `Erstelle aus diesem Wunsch einen vollständigen, direkt nutzbaren Plan auf Deutsch:
-"${raw}"
-Nutze klare Abschnitte, sinnvolle Schritte und – falls passend – Tage oder Termine.`;
-
-      show("IRON erstellt den vollständigen Plan...");
-      let fullPlan;
-      let usedFallback = false;
-      try{
-        fullPlan = await cloud.askAI(prompt);
-      }catch(aiError){
-        console.warn("IRON AI plan fallback:", aiError);
-        fullPlan = buildLocalPlanFallback(raw, sport, days);
-        usedFallback = true;
-      }
-
-      await createPlan(name, fullPlan);
-      const a = usedFallback
-        ? `Plan gespeichert: ${name}. Die AI-Function war nicht erreichbar, deshalb wurde ein lokaler IRON-Plan erstellt.`
-        : `Plan gespeichert: ${name}`;
-      show(a); speak(a); renderPlansScreen(); return;
-    }
-    if(localPCCommand(t)){
-      await checkPC();
-      if(!pcOnline){
-        const a="IRON Cloud ist online, aber dein PC-Agent ist offline. Der PC-Befehl wurde nicht ausgeführt.";
-        show(a); speak(a); return;
-      }
-      await queuePCCommand(t);
-      const a="Befehl wurde an deinen PC-Agenten gesendet."; show(a); speak(a); return;
-    }
-    // Cloud AI fallback: works even when the PC is off.
-    show("IRON Cloud denkt...");
-    const answer = await cloud.askAI(t);
-    show(answer);
-    speak(answer);
-  }catch(e){
-    const code = e?.code ? ` [${e.code}]` : "";
-    show("Cloud-Fehler" + code + ": " + (e?.message||e));
-    console.error("IRON cloud error", e);
-  }
+    const answer=await window.IRONLocalData.execute(t);
+    if(input)input.value='';
+    show(answer);commandEvent('assistant',answer);
+    if(!document.hidden&&speechEpoch===window.IRONConversation?.speechEpoch)await window.IRONMobile?.speak?.(answer);
+    await Promise.allSettled([renderTasksScreen(),renderPlansScreen(),renderShoppingScreen()]);
+  }catch(e){show(e.message);commandEvent('error',e.message);}
+  finally{commandBusy=false;if(send)send.disabled=false;}
 }
 
 // ---------- UI ----------
@@ -1410,8 +1283,8 @@ async function updateHudMetrics(){
       cloud.list(cloud.cfg.tables.tasks,[cloud.Query.limit(100)]),
       cloud.list(cloud.cfg.tables.plans,[cloud.Query.limit(100)])
     ]);
-    const normalPlans=plans.filter(p=>!String(p.name||"").startsWith(SHOP_PREFIX));
-    const shopping=plans.filter(p=>String(p.name||"").startsWith(SHOP_PREFIX));
+    const normalPlans=plans.filter(p=>p.typ!=="einkauf"&&!String(p.name||"").startsWith(SHOP_PREFIX));
+    const shopping=plans.filter(p=>p.typ==="einkauf"||String(p.name||"").startsWith(SHOP_PREFIX));
     const openTasks=tasks.filter(t=>!t.erledigt);
     const map={
       hudTaskCount:openTasks.length,
@@ -1501,7 +1374,7 @@ if(SR&&voiceBtn){
 }
 
 window.command=command;
-window.renderPlansScreen=renderPlansScreen; window.renderTasksScreen=renderTasksScreen;
+window.renderPlansScreen=renderPlansScreen; window.renderTasksScreen=renderTasksScreen; window.renderShoppingScreen=renderShoppingScreen;
 window.deletePlanAndRefresh=deletePlanAndRefresh; window.toggleTaskAndRefresh=toggleTaskAndRefresh;
 
 initAuth().catch(e=>{

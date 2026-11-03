@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   const KEY = 'iron_web_ideen_v1';
-  const MIGRATED = window.IRONLocalDataActive ? 'iron_web_ideen_pc_migrated_v1' : 'iron_web_ideen_appwrite_migrated_v1';
+  const MIGRATED = 'iron_web_ideen_' + (window.IRONConnectionMode || 'cloud') + '_migrated_v1';
   const STATUS = {neu:'NEU',arbeit:'IN ARBEIT',fertig:'UMGESETZT'};
   const $ = id => document.getElementById(id);
   let ideas = [];

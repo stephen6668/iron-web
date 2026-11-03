@@ -5,21 +5,21 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#02070c">
 <title>IRON // HUD</title>
-<link rel="stylesheet" href="style.css?v=2426">
-<link rel="stylesheet" href="iron-web-polish.css?v=2426"></head>
+<link rel="stylesheet" href="style.css?v=2600">
+<link rel="stylesheet" href="iron-web-polish.css?v=2600"><link rel="stylesheet" href="iron-jarvis.css?v=2600"></head>
 <body class="hud-body">
 <div class="grid hud-grid"></div><div class="scanlines"></div>
 
 <header class="hud-top">
   <a class="brand" href="index.html"><span class="mark">I</span><div><b>IRON</b><small>HUD SYSTEM</small></div></a>
   <div class="hud-timebox"><span id="hudDate">--.--.----</span><b id="hudTime">--:--:--</b></div>
-  <div class="status"><i></i> PC <b id="cloudStatus">CONNECTING</b></div>
+  <div class="status"><i></i> SERVER <b id="cloudStatus">CONNECTING</b></div>
 </header>
 
 <main class="hud-main">
   <section class="hud-panel hud-left-top">
     <header>WETTER</header>
-    <p>IRON PC bereit</p>
+    <p>Aktuelle Wetterdaten benötigen eine separate Anbindung.</p>
     <button data-command="Wie ist das Wetter heute?">WETTER ABFRAGEN</button>
   </section>
 
@@ -58,8 +58,8 @@
 
   <section class="hud-panel hud-left-mid">
     <header>AKTIEN / FINANZEN</header>
-    <div id="hudStocks" class="hud-live-list"><p>Kurse bereit zum Laden.</p></div>
-    <button id="stocksBtn">LIVE KURSE</button>
+    <div id="hudStocks" class="hud-live-list"><p>Kein Kursdienst verbunden.</p></div>
+    <p>Live-Kurse benötigen eine separate Anbindung.</p>
   </section>
 
   <section class="hud-panel hud-right-mid">
@@ -109,10 +109,10 @@
 
 
 
-<script src="iron-local-data.js?v=2426"></script>
+<script src="iron-local-data.js?v=2600"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="app.js?v=2426"></script>
-<script src="web-bridge.js?v=2426"></script>
-<script src="iron-menu.js?v=2426"></script>
-<script src="iron-web-live.js?v=2426"></script></body>
+<script src="app.js?v=2600"></script>
+<script src="web-bridge.js?v=2600"></script>
+<script src="iron-menu.js?v=2600"></script>
+<script src="iron-web-live.js?v=2600"></script></body>
 </html>

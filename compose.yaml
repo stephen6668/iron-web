@@ -1,0 +1,19 @@
+services:
+  iron:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: "8787"
+      IRON_DATA_DIR: /data
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - iron-data:/data
+    init: true
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  iron-data:
